@@ -7,6 +7,7 @@ import (
 	"github.com/Saveliy12/expenses/internal/api/health"
 	"github.com/Saveliy12/expenses/internal/api/httpx"
 	panelv1 "github.com/Saveliy12/expenses/internal/api/panel/v1"
+	"github.com/Saveliy12/expenses/internal/api/web"
 	"github.com/Saveliy12/expenses/internal/service"
 )
 
@@ -47,7 +48,14 @@ func NewRouter(
 		}
 	}, http.MethodGet, http.MethodPatch, http.MethodDelete))
 
-	mux.HandleFunc("/", notFound)
+	mux.Handle("/static/", http.StripPrefix("/static/", web.Handler()))
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/" {
+			notFound(w, r)
+			return
+		}
+		web.Handler().ServeHTTP(w, r)
+	})
 
 	return httpx.RequestID(
 		httpx.RequestLogger(logger, httpx.Recoverer(logger, mux)),

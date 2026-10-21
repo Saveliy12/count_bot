@@ -13,6 +13,7 @@ LLM используется только как парсер текста в т
 - `cmd/main.go` — точка входа, `.env`, graceful shutdown.
 - `internal/app` — сборка зависимостей и запуск HTTP + Telegram.
 - `internal/api` — HTTP-роутер, middleware, REST панели.
+- `internal/api/web` — встроенная статика веб-панели (`go:embed`).
 - `internal/bot` — Telegram polling, handler, LLMProcessor, pending-состояния.
 - `internal/llm` — Groq-клиент, strict JSON Schema, intent, prompt, eval.
 - `internal/config` — env-конфигурация.
@@ -96,7 +97,8 @@ docker compose down          # volume с данными сохраняется
 
 ## Текущие ограничения
 
-- Веб-панель и README ещё не сделаны; Compose уже проверен на изолированном запуске.
+- Веб-панель в работе: каркас статики готов, список/фильтры/формы ещё не сделаны.
+  README ещё не написан; Compose проверен на изолированном запуске.
 - Если локальный `go run` занимает порт 8083, останови его перед `docker compose up`.
 - Pending-состояния (подтверждение удаления/уточнения) хранятся в памяти и теряются
   при рестарте.

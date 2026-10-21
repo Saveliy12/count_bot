@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Семейные расходы</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Семейный бюджет</p>
+        <h1>Расходы</h1>
+      </div>
+      <button class="button" type="button" disabled>Добавить трату</button>
+    </header>
+
+    <section class="receipt" aria-live="polite">
+      <div class="receipt__row">
+        <span class="receipt__label">Итого за период</span>
+        <strong class="receipt__total" id="total">— ₽</strong>
+      </div>
+      <div class="receipt__meta" id="count">Загрузка…</div>
+    </section>
+
+    <section class="panel">
+      <p class="muted">Панель подключается к API…</p>
+    </section>
+  </main>
+
+  <script src="/static/app.js" defer></script>
+</body>
+</html>
