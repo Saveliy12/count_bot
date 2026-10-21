@@ -139,7 +139,9 @@ func (c *Client) Parse(ctx context.Context, req Request) (Intent, error) {
 			"duration", time.Since(startedAt),
 		)
 
-		if response.StatusCode != http.StatusTooManyRequests && response.StatusCode < 500 {
+		if response.StatusCode != http.StatusTooManyRequests &&
+			response.StatusCode < 500 &&
+			!isRetryableGenerationError(response.StatusCode, responseBody) {
 			break
 		}
 		if attempt == maxAttempts {
@@ -457,6 +459,15 @@ func deref(value *string) string {
 	}
 
 	return *value
+}
+
+func isRetryableGenerationError(status int, body []byte) bool {
+	if status != http.StatusBadRequest {
+		return false
+	}
+
+	return bytes.Contains(body, []byte("json_validate_failed")) ||
+		bytes.Contains(body, []byte("failed_generation"))
 }
 
 func retryDelay(response *http.Response, attempt int) time.Duration {
