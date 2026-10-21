@@ -21,7 +21,8 @@ LLM используется только как парсер текста в т
 - `internal/service` / `internal/repository` — бизнес-логика и PostgreSQL.
 - `internal/migrator`, `migrations` — goose-миграции.
 - `internal/testdb` — временные схемы PostgreSQL для интеграционных тестов.
-- `docs/` — AI-документация и журнал крупных изменений.
+- `docs/` — AI-документация, скриншоты и журнал крупных изменений.
+- `README.md` — быстрый старт, архитектура, API и ручной чек-лист.
 
 ## Главные правила
 
@@ -67,9 +68,13 @@ TEST_DATABASE_URL='postgres://expenses:expenses@127.0.0.1:55432/expenses?sslmode
 LLM_INTEGRATION=1 TEST_DATABASE_URL='...' \
   go test ./internal/bot -run TestLLMProcessorWithGroq -v
 
-# оценка качества модели
+# оценка качества модели (быстрая выборка)
 LLM_EVAL=1 LLM_EVAL_LIMIT=10 LLM_EVAL_DELAY=3s \
   go test ./internal/llm -run TestModelEvaluation -v
+
+# полный набор на free tier
+LLM_EVAL=1 LLM_EVAL_DELAY=18s \
+  go test ./internal/llm -run TestModelEvaluation -v -timeout 20m
 ```
 
 ## Docker Compose
@@ -97,8 +102,8 @@ docker compose down          # volume с данными сохраняется
 
 ## Текущие ограничения
 
-- Веб-панель: CRUD, фильтры и итоги готовы; остались финальная полировка, сквозной E2E
-  и README. Удаление подтверждается нативным `confirm`.
+- Веб-панель и README готовы; остался финальный ручной Telegram E2E на реальном боте.
+  Удаление в панели подтверждается нативным `confirm`.
 - Если локальный `go run` занимает порт 8083, останови его перед `docker compose up`.
 - Pending-состояния (подтверждение удаления/уточнения) хранятся в памяти и теряются
   при рестарте.
