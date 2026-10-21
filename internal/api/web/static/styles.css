@@ -6,6 +6,7 @@
   --line: #e4ded3;
   --accent: #b55239;
   --accent-soft: #f3dfd6;
+  --danger: #9c3f32;
   --shadow: 0 18px 45px rgba(70, 55, 38, 0.08);
   --radius: 18px;
   --sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -14,6 +15,10 @@
 
 * {
   box-sizing: border-box;
+}
+
+[hidden] {
+  display: none !important;
 }
 
 body {
@@ -25,6 +30,19 @@ body {
   color: var(--ink);
   font-family: var(--sans);
   line-height: 1.5;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .shell {
@@ -59,6 +77,12 @@ h1 {
   line-height: 1;
 }
 
+.lede {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 15px;
+}
+
 .button {
   min-height: 44px;
   padding: 0 18px;
@@ -66,20 +90,30 @@ h1 {
   border-radius: 999px;
   background: var(--ink);
   color: var(--card);
-  font: inherit;
   font-weight: 600;
   cursor: pointer;
+  transition: transform 120ms ease, opacity 120ms ease;
+}
+
+.button:hover:not(:disabled) {
+  transform: translateY(-1px);
 }
 
 .button:disabled {
-  cursor: wait;
-  opacity: 0.45;
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.button--ghost {
+  border-color: var(--line);
+  background: transparent;
+  color: var(--ink);
 }
 
 .receipt {
   position: relative;
   overflow: hidden;
-  padding: 26px 28px;
+  padding: 26px 110px 26px 28px;
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--card);
@@ -97,6 +131,22 @@ h1 {
   content: "";
 }
 
+.receipt__stamp {
+  position: absolute;
+  top: 22px;
+  right: 26px;
+  padding: 4px 10px;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  opacity: 0.5;
+  text-transform: uppercase;
+  transform: rotate(-7deg);
+}
+
 .receipt__row {
   display: flex;
   align-items: baseline;
@@ -110,33 +160,246 @@ h1 {
 }
 
 .receipt__total {
+  display: block;
+  margin-top: 4px;
   font-family: var(--serif);
-  font-size: clamp(30px, 5vw, 48px);
+  font-size: clamp(32px, 5vw, 52px);
   font-weight: 500;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.04em;
 }
 
 .receipt__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
   margin-top: 10px;
   color: var(--muted);
   font-size: 14px;
 }
 
-.panel {
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 16px;
   margin-top: 24px;
-  padding: 28px;
+}
+
+.filters .button {
+  flex: 0 0 auto;
+}
+
+.field {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 180px;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.field select,
+.field input {
+  width: 100%;
+  min-height: 42px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  outline: none;
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 400;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.field--dates {
+  flex-basis: 100%;
+}
+
+.date-range {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+
+.date-range label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.date-range input {
+  width: auto;
+  min-width: 155px;
+}
+
+.list-panel {
+  margin-top: 24px;
+  padding: 24px 28px 28px;
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--card);
 }
 
+.list-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+
+h2 {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: 24px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+}
+
+.status {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.status:empty {
+  display: none;
+}
+
+.status--error {
+  color: var(--danger);
+}
+
 .muted {
   margin: 0;
   color: var(--muted);
+  font-size: 13px;
 }
 
-@media (max-width: 640px) {
+.table-wrap {
+  margin-top: 12px;
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th {
+  padding: 0 12px 10px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-align: left;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+td {
+  padding: 14px 12px;
+  border-top: 1px solid var(--line);
+  vertical-align: middle;
+}
+
+th.amount,
+td.amount {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+td.amount {
+  font-weight: 600;
+}
+
+.member,
+.category {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.comment {
+  max-width: 34ch;
+  overflow: hidden;
+  color: var(--muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--muted);
+}
+
+.dot[data-category="food"] { background: #c47a4a; }
+.dot[data-category="transport"] { background: #527a8a; }
+.dot[data-category="housing"] { background: #8a6f9e; }
+.dot[data-category="entertainment"] { background: #c05f7a; }
+.dot[data-category="health"] { background: #5d8a6b; }
+.dot[data-category="shopping"] { background: #b08a45; }
+.dot[data-category="education"] { background: #6b7fb0; }
+.dot[data-category="travel"] { background: #4f8b88; }
+.dot[data-category="subscriptions"] { background: #8a7a5f; }
+.dot[data-category="gifts"] { background: #c47a8e; }
+.dot[data-category="pets"] { background: #7a8a4f; }
+.dot[data-category="personal_care"] { background: #b07a9e; }
+.dot[data-category="sport"] { background: #5f8a8a; }
+.dot[data-category="other"] { background: #9a958c; }
+
+.empty {
+  padding: 36px 0 18px;
+  text-align: center;
+}
+
+.empty p {
+  margin: 0 0 4px;
+  font-family: var(--serif);
+  font-size: 22px;
+}
+
+.empty span {
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.list-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  border: 0;
+  margin: -1px;
+  clip: rect(0 0 0 0);
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+@media (max-width: 760px) {
   .shell {
     padding-top: 28px;
   }
@@ -147,13 +410,88 @@ h1 {
   }
 
   .receipt,
-  .panel {
+  .list-panel {
     padding: 20px;
+  }
+
+  .receipt {
+    padding-right: 20px;
+  }
+
+  .receipt__stamp {
+    display: none;
   }
 
   .receipt__row {
     align-items: flex-start;
     flex-direction: column;
     gap: 4px;
+  }
+
+  .field {
+    flex-basis: 100%;
+  }
+
+  .filters .button {
+    width: 100%;
+  }
+
+  .list-head {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .table-wrap {
+    overflow: visible;
+  }
+
+  table,
+  thead,
+  tbody,
+  tr,
+  td {
+    display: block;
+  }
+
+  thead {
+    display: none;
+  }
+
+  tbody {
+    display: grid;
+    gap: 12px;
+  }
+
+  tr {
+    padding: 10px 14px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+  }
+
+  td {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 5px 0;
+    border: 0;
+  }
+
+  td::before {
+    color: var(--muted);
+    content: attr(data-label);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  td.amount {
+    font-size: 18px;
+  }
+
+  .comment {
+    max-width: 60vw;
+    text-align: right;
   }
 }

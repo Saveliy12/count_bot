@@ -13,20 +13,95 @@
       <div>
         <p class="eyebrow">Семейный бюджет</p>
         <h1>Расходы</h1>
+        <p class="lede">Все траты семьи в одном месте.</p>
       </div>
-      <button class="button" type="button" disabled>Добавить трату</button>
+      <button class="button" id="add-expense" type="button" disabled>Добавить трату</button>
     </header>
 
     <section class="receipt" aria-live="polite">
+      <span class="receipt__stamp" aria-hidden="true">семья</span>
       <div class="receipt__row">
-        <span class="receipt__label">Итого за период</span>
-        <strong class="receipt__total" id="total">— ₽</strong>
+        <div>
+          <span class="receipt__label">Итого за период</span>
+          <strong class="receipt__total" id="total">— ₽</strong>
+        </div>
       </div>
-      <div class="receipt__meta" id="count">Загрузка…</div>
+      <div class="receipt__meta">
+        <span id="count">Загрузка…</span>
+        <span id="period-label"></span>
+      </div>
     </section>
 
-    <section class="panel">
-      <p class="muted">Панель подключается к API…</p>
+    <section class="panel filters" aria-label="Фильтры">
+      <label class="field">
+        <span>Участник</span>
+        <select id="member-filter">
+          <option value="">Вся семья</option>
+        </select>
+      </label>
+
+      <label class="field">
+        <span>Период</span>
+        <select id="period-filter">
+          <option value="month">Этот месяц</option>
+          <option value="today">Сегодня</option>
+          <option value="week">Последние 7 дней</option>
+          <option value="all">Всё время</option>
+          <option value="custom">Свой диапазон</option>
+        </select>
+      </label>
+
+      <div class="field field--dates" id="custom-dates" hidden>
+        <span>Свой диапазон</span>
+        <div class="date-range">
+          <label>С <input type="date" id="from-filter"></label>
+          <label>По <input type="date" id="to-filter"></label>
+        </div>
+      </div>
+
+      <label class="field">
+        <span>Категория</span>
+        <select id="category-filter">
+          <option value="">Все категории</option>
+        </select>
+      </label>
+
+      <button class="button button--ghost" type="button" id="reset-filters">Сбросить</button>
+    </section>
+
+    <section class="panel list-panel" id="list-panel">
+      <div class="list-head">
+        <h2>Траты</h2>
+        <span class="muted" id="list-hint"></span>
+      </div>
+
+      <p class="status" id="status" role="status" aria-live="polite"></p>
+
+      <div class="table-wrap" id="table-wrap" hidden>
+        <table>
+          <caption class="visually-hidden">Траты семьи</caption>
+          <thead>
+            <tr>
+              <th>Дата</th>
+              <th>Кто</th>
+              <th>Категория</th>
+              <th>Комментарий</th>
+              <th class="amount">Сумма</th>
+            </tr>
+          </thead>
+          <tbody id="expenses-body"></tbody>
+        </table>
+      </div>
+
+      <div class="empty" id="empty" hidden>
+        <p id="empty-title">За этот период трат нет.</p>
+        <span>Попробуйте изменить фильтры.</span>
+      </div>
+
+      <div class="list-foot">
+        <button class="button button--ghost" type="button" id="load-more" hidden>Показать ещё</button>
+        <button class="button button--ghost" type="button" id="retry" hidden>Повторить</button>
+      </div>
     </section>
   </main>
 
