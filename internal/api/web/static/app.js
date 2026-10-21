@@ -36,6 +36,7 @@ const state = {
   offset: 0,
   loading: false,
   requestId: 0,
+  ready: false,
   highlightId: null,
   editingId: null,
   filters: {
@@ -69,6 +70,7 @@ const els = {
   retry: document.querySelector("#retry"),
   listPanel: document.querySelector("#list-panel"),
   dialog: document.querySelector("#expense-dialog"),
+  dialogEyebrow: document.querySelector("#expense-dialog-eyebrow"),
   dialogTitle: document.querySelector("#expense-dialog-title"),
   form: document.querySelector("#expense-form"),
   formUser: document.querySelector("#form-user"),
@@ -222,10 +224,10 @@ function periodText() {
         return `${formatDate(state.filters.from)} — ${formatDate(state.filters.to)}`;
       }
       if (state.filters.from) {
-        return `с ${formatDate(state.filters.from)}`;
+        return `период с ${formatDate(state.filters.from)}`;
       }
       if (state.filters.to) {
-        return `до ${formatDate(state.filters.to)}`;
+        return `период до ${formatDate(state.filters.to)}`;
       }
       return "выбранный период";
     default:
@@ -244,6 +246,19 @@ function formatError(error) {
     return fieldMessages[field];
   }
 
+  if (error instanceof TypeError) {
+    return "Нет соединения с сервером.";
+  }
+
+  if (error?.status === 400) {
+    return "Проверьте данные.";
+  }
+  if (error?.status === 404) {
+    return "Данные не найдены.";
+  }
+  if (error?.status === 409) {
+    return "Данные уже изменились.";
+  }
   if (error?.status >= 500) {
     return "Сервер временно недоступен.";
   }
@@ -295,10 +310,7 @@ function showFieldError(field, message) {
 
 function showFormError(error) {
   const field = error?.body?.error?.field;
-  const message = fieldMessages[field] ||
-    error?.body?.error?.message ||
-    error?.message ||
-    "Не удалось сохранить трату.";
+  const message = (field && fieldMessages[field]) || formatError(error);
 
   if (field && formInputs[field]) {
     showFieldError(field, message);
@@ -332,8 +344,10 @@ function openExpenseDialog(expense = null) {
     (category) => category.label,
   );
 
+  els.dialogEyebrow.textContent = expense ? "Изменение записи" : "Новая запись";
   els.dialogTitle.textContent = expense ? "Изменить трату" : "Добавить трату";
   els.formUser.disabled = Boolean(expense);
+  els.formUser.title = expense ? "Владельца траты нельзя изменить" : "";
   els.formUser.value = expense
     ? String(expense.user_id)
     : state.filters.userId || String(state.users[0].telegram_id);
@@ -454,6 +468,12 @@ async function deleteExpense(expense, button) {
     showToast("Трата удалена");
     await loadExpenses();
   } catch (error) {
+    if (error?.status === 404) {
+      showToast("Трата уже удалена.");
+      await loadExpenses();
+      return;
+    }
+
     showToast(`Не удалось удалить: ${formatError(error)}`);
     button.disabled = false;
   }
@@ -582,6 +602,7 @@ function resetAndLoad() {
 }
 
 async function init() {
+  state.ready = false;
   setStatus("Загрузка…");
   els.retry.hidden = true;
   els.status.classList.remove("status--error");
@@ -595,6 +616,7 @@ async function init() {
 
     state.users = users.items || [];
     state.categories = categories.items || [];
+    state.ready = true;
 
     fillSelect(
       els.member,
@@ -667,6 +689,11 @@ els.loadMore.addEventListener("click", () => {
 });
 
 els.retry.addEventListener("click", () => {
+  if (state.ready) {
+    loadExpenses();
+    return;
+  }
+
   init();
 });
 
