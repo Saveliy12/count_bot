@@ -22,6 +22,7 @@ type ExpenseRepository interface {
 	ListByUser(ctx context.Context, userID int64, filter model.ExpenseFilter) (model.ExpensePage, error)
 	ListByFamily(ctx context.Context, familyID int64, filter model.FamilyExpenseFilter) (model.ExpensePage, error)
 	SummaryByUser(ctx context.Context, userID int64, filter model.ExpenseFilter) (model.ExpenseSummary, error)
+	SummaryByFamily(ctx context.Context, familyID int64, filter model.FamilyExpenseFilter) (model.ExpenseSummary, error)
 	LatestByUser(ctx context.Context, userID int64) (model.Expense, error)
 	LatestByUserFiltered(ctx context.Context, userID int64, filter model.ExpenseFilter) (model.Expense, error)
 	Update(ctx context.Context, expense model.Expense) (model.Expense, error)

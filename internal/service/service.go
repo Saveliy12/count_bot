@@ -16,6 +16,7 @@ type ExpenseService interface {
 	ListExpenses(ctx context.Context, actor model.Actor, filter model.ExpenseFilter) (model.ExpensePage, error)
 	ListFamilyExpenses(ctx context.Context, filter model.FamilyExpenseFilter) (model.ExpensePage, error)
 	SummarizeExpenses(ctx context.Context, actor model.Actor, filter model.ExpenseFilter) (model.ExpenseSummary, error)
+	SummarizeFamilyExpenses(ctx context.Context, filter model.FamilyExpenseFilter) (model.ExpenseSummary, error)
 	LatestExpense(ctx context.Context, actor model.Actor) (model.Expense, error)
 	LatestExpenseFiltered(ctx context.Context, actor model.Actor, filter model.ExpenseFilter) (model.Expense, error)
 

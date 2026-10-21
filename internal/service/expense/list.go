@@ -57,6 +57,23 @@ func (s *Service) SummarizeExpenses(
 	return s.expenses.SummaryByUser(ctx, actor.TelegramID, filter)
 }
 
+func (s *Service) SummarizeFamilyExpenses(
+	ctx context.Context,
+	filter model.FamilyExpenseFilter,
+) (model.ExpenseSummary, error) {
+	family, err := s.families.GetDefault(ctx)
+	if err != nil {
+		return model.ExpenseSummary{}, err
+	}
+
+	filter, err = normalizeFamilyFilter(filter)
+	if err != nil {
+		return model.ExpenseSummary{}, err
+	}
+
+	return s.expenses.SummaryByFamily(ctx, family.ID, filter)
+}
+
 func (s *Service) LatestExpense(ctx context.Context, actor model.Actor) (model.Expense, error) {
 	if err := validateActor(actor); err != nil {
 		return model.Expense{}, err

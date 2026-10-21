@@ -13,6 +13,12 @@ func (a *API) ListExpenses(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	summary, err := a.expenseService.SummarizeFamilyExpenses(r.Context(), filter)
+	if err != nil {
+		httpx.WriteServiceError(w, a.logger, err)
+		return
+	}
+
 	page, err := a.expenseService.ListFamilyExpenses(r.Context(), filter)
 	if err != nil {
 		httpx.WriteServiceError(w, a.logger, err)
@@ -22,5 +28,7 @@ func (a *API) ListExpenses(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, expensesResponse{
 		Items:   newExpenseResponses(page.Items),
 		HasMore: page.HasMore,
+		Total:   summary.Total.StringFixed(2),
+		Count:   summary.Count,
 	})
 }

@@ -243,6 +243,37 @@ func (s *fakeStore) SummaryByUser(
 	return model.ExpenseSummary{Total: total, Count: count}, nil
 }
 
+func (s *fakeStore) SummaryByFamily(
+	_ context.Context,
+	familyID int64,
+	filter model.FamilyExpenseFilter,
+) (model.ExpenseSummary, error) {
+	total := decimal.Zero
+	var count int64
+	for _, expense := range s.expenses {
+		user, ok := s.users[expense.UserID]
+		if !ok || user.FamilyID != familyID {
+			continue
+		}
+		if filter.UserID > 0 && expense.UserID != filter.UserID {
+			continue
+		}
+		if filter.Category != nil && expense.Category != *filter.Category {
+			continue
+		}
+		if !filter.From.IsZero() && expense.SpentAt.Before(filter.From) {
+			continue
+		}
+		if !filter.To.IsZero() && expense.SpentAt.After(filter.To) {
+			continue
+		}
+		total = total.Add(expense.Amount)
+		count++
+	}
+
+	return model.ExpenseSummary{Total: total, Count: count}, nil
+}
+
 func (s *fakeStore) LatestByUser(ctx context.Context, userID int64) (model.Expense, error) {
 	return s.LatestByUserFiltered(ctx, userID, model.ExpenseFilter{})
 }
@@ -661,6 +692,18 @@ func TestFamilyExpenses(t *testing.T) {
 	}
 	if len(familyExpenses.Items) != 2 {
 		t.Fatalf("expected 2 family expenses, got %d", len(familyExpenses.Items))
+	}
+
+	familySummary, err := service.SummarizeFamilyExpenses(ctx, model.FamilyExpenseFilter{})
+	if err != nil {
+		t.Fatalf("summarize family expenses: %v", err)
+	}
+	if familySummary.Count != 2 || !familySummary.Total.Equal(decimal.NewFromInt(300)) {
+		t.Fatalf(
+			"unexpected family summary: count=%d total=%s",
+			familySummary.Count,
+			familySummary.Total,
+		)
 	}
 
 	userAFilter := model.FamilyExpenseFilter{UserID: userA.TelegramID}

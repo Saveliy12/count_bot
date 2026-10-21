@@ -234,6 +234,46 @@ func TestRepositories(t *testing.T) {
 		t.Fatalf("unexpected food summary: count=%d total=%s", foodSummary.Count, foodSummary.Total)
 	}
 
+	familySummary, err := expenses.SummaryByFamily(ctx, family.ID, model.FamilyExpenseFilter{})
+	if err != nil {
+		t.Fatalf("summarize family expenses: %v", err)
+	}
+	if familySummary.Count != 4 || !familySummary.Total.Equal(decimal.RequireFromString("650.50")) {
+		t.Fatalf(
+			"unexpected family summary: count=%d total=%s",
+			familySummary.Count,
+			familySummary.Total,
+		)
+	}
+
+	familyUserSummary, err := expenses.SummaryByFamily(ctx, family.ID, model.FamilyExpenseFilter{
+		UserID: userA.TelegramID,
+	})
+	if err != nil {
+		t.Fatalf("summarize family expenses for user A: %v", err)
+	}
+	if familyUserSummary.Count != 3 || !familyUserSummary.Total.Equal(decimal.RequireFromString("600.50")) {
+		t.Fatalf(
+			"unexpected family user summary: count=%d total=%s",
+			familyUserSummary.Count,
+			familyUserSummary.Total,
+		)
+	}
+
+	familyFoodSummary, err := expenses.SummaryByFamily(ctx, family.ID, model.FamilyExpenseFilter{
+		Category: &foodCategory,
+	})
+	if err != nil {
+		t.Fatalf("summarize family food expenses: %v", err)
+	}
+	if familyFoodSummary.Count != 2 || !familyFoodSummary.Total.Equal(decimal.RequireFromString("400.50")) {
+		t.Fatalf(
+			"unexpected family food summary: count=%d total=%s",
+			familyFoodSummary.Count,
+			familyFoodSummary.Total,
+		)
+	}
+
 	filteredLatest, err := expenses.LatestByUserFiltered(ctx, userA.TelegramID, model.ExpenseFilter{
 		From:     testDate(2026, 10, 20),
 		To:       testDate(2026, 10, 20),

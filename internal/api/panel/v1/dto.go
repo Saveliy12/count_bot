@@ -42,6 +42,8 @@ type categoriesResponse struct {
 type expensesResponse struct {
 	Items   []expenseResponse `json:"items"`
 	HasMore bool              `json:"has_more"`
+	Total   string            `json:"total"`
+	Count   int64             `json:"count"`
 }
 
 type usersResponse struct {

@@ -41,6 +41,8 @@ type stubPanelService struct {
 	expensesErr     error
 	expensesHasMore bool
 	listFilter      model.FamilyExpenseFilter
+	summary         model.ExpenseSummary
+	summaryErr      error
 
 	expense model.Expense
 	getErr  error
@@ -74,6 +76,14 @@ func (s *stubPanelService) ListFamilyExpenses(
 ) (model.ExpensePage, error) {
 	s.listFilter = filter
 	return model.ExpensePage{Items: s.expenses, HasMore: s.expensesHasMore}, s.expensesErr
+}
+
+func (s *stubPanelService) SummarizeFamilyExpenses(
+	_ context.Context,
+	filter model.FamilyExpenseFilter,
+) (model.ExpenseSummary, error) {
+	s.listFilter = filter
+	return s.summary, s.summaryErr
 }
 
 func (s *stubPanelService) GetFamilyExpense(context.Context, int64) (model.Expense, error) {
@@ -256,6 +266,10 @@ func TestListExpensesAPI(t *testing.T) {
 	service := &stubPanelService{
 		expenses:        []model.Expense{testExpense()},
 		expensesHasMore: true,
+		summary: model.ExpenseSummary{
+			Total: decimal.RequireFromString("350.50"),
+			Count: 1,
+		},
 	}
 	request := httptest.NewRequest(
 		http.MethodGet,
@@ -291,6 +305,9 @@ func TestListExpensesAPI(t *testing.T) {
 	}
 	if !body.HasMore {
 		t.Fatal("expected has_more to be passed through")
+	}
+	if body.Total != "350.50" || body.Count != 1 {
+		t.Fatalf("unexpected summary in response: total=%q count=%d", body.Total, body.Count)
 	}
 }
 

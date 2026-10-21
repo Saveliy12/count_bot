@@ -49,6 +49,7 @@ type fakeExpenseService struct {
 	createFn            func(context.Context, model.Actor, model.CreateExpenseInput) (model.Expense, error)
 	listFn              func(context.Context, model.Actor, model.ExpenseFilter) (model.ExpensePage, error)
 	summaryFn           func(context.Context, model.Actor, model.ExpenseFilter) (model.ExpenseSummary, error)
+	summaryFamilyFn     func(context.Context, model.FamilyExpenseFilter) (model.ExpenseSummary, error)
 	latestFn            func(context.Context, model.Actor) (model.Expense, error)
 	latestFilteredFn    func(context.Context, model.Actor, model.ExpenseFilter) (model.Expense, error)
 	getFn               func(context.Context, model.Actor, int64) (model.Expense, error)
@@ -127,6 +128,16 @@ func (f *fakeExpenseService) SummarizeExpenses(
 		return model.ExpenseSummary{}, fmt.Errorf("unexpected SummarizeExpenses call")
 	}
 	return f.summaryFn(ctx, actor, filter)
+}
+
+func (f *fakeExpenseService) SummarizeFamilyExpenses(
+	ctx context.Context,
+	filter model.FamilyExpenseFilter,
+) (model.ExpenseSummary, error) {
+	if f.summaryFamilyFn == nil {
+		return model.ExpenseSummary{}, fmt.Errorf("unexpected SummarizeFamilyExpenses call")
+	}
+	return f.summaryFamilyFn(ctx, filter)
 }
 
 func (f *fakeExpenseService) LatestExpense(
