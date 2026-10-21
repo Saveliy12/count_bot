@@ -326,6 +326,49 @@ td.amount {
   font-weight: 600;
 }
 
+th.actions,
+td.actions {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.actions-list {
+  display: inline-flex;
+  gap: 12px;
+}
+
+.link-button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  text-underline-offset: 3px;
+}
+
+.link-button:hover {
+  color: var(--accent);
+  text-decoration-color: currentColor;
+}
+
+.link-button--danger:hover {
+  color: var(--danger);
+}
+
+.link-button:disabled {
+  cursor: wait;
+  opacity: 0.4;
+}
+
+.field select:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
 .member,
 .category {
   display: inline-flex;
@@ -594,6 +637,10 @@ td.amount {
 
   td.amount {
     font-size: 18px;
+  }
+
+  td.actions .actions-list {
+    margin-left: auto;
   }
 
   .comment {

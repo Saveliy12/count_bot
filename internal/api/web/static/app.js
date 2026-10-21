@@ -37,6 +37,7 @@ const state = {
   loading: false,
   requestId: 0,
   highlightId: null,
+  editingId: null,
   filters: {
     userId: "",
     category: "",
@@ -68,6 +69,7 @@ const els = {
   retry: document.querySelector("#retry"),
   listPanel: document.querySelector("#list-panel"),
   dialog: document.querySelector("#expense-dialog"),
+  dialogTitle: document.querySelector("#expense-dialog-title"),
   form: document.querySelector("#expense-form"),
   formUser: document.querySelector("#form-user"),
   formAmount: document.querySelector("#form-amount"),
@@ -307,12 +309,13 @@ function showFormError(error) {
   els.formError.hidden = false;
 }
 
-function openCreateDialog() {
+function openExpenseDialog(expense = null) {
   if (!state.users.length) {
     showToast("Нет участников. Напишите боту /start.");
     return;
   }
 
+  state.editingId = expense?.id ?? null;
   els.form.reset();
   fillSelect(
     els.formUser,
@@ -329,10 +332,15 @@ function openCreateDialog() {
     (category) => category.label,
   );
 
-  els.formUser.value = state.filters.userId || String(state.users[0].telegram_id);
-  els.formCategory.value = state.filters.category || "";
-  els.formDate.value = localDate();
-  els.formComment.value = "";
+  els.dialogTitle.textContent = expense ? "Изменить трату" : "Добавить трату";
+  els.formUser.disabled = Boolean(expense);
+  els.formUser.value = expense
+    ? String(expense.user_id)
+    : state.filters.userId || String(state.users[0].telegram_id);
+  els.formAmount.value = expense ? expense.amount.replace(".", ",") : "";
+  els.formCategory.value = expense ? expense.category : state.filters.category || "";
+  els.formDate.value = expense ? expense.spent_at : localDate();
+  els.formComment.value = expense ? expense.comment : "";
   clearFormError();
 
   els.dialog.showModal();
@@ -404,6 +412,53 @@ function amountCell(value) {
   return element;
 }
 
+function actionsCell(expense) {
+  const element = document.createElement("td");
+  element.className = "actions";
+  element.dataset.label = "Действия";
+
+  const actions = document.createElement("span");
+  actions.className = "actions-list";
+
+  const edit = document.createElement("button");
+  edit.type = "button";
+  edit.className = "link-button";
+  edit.textContent = "Изменить";
+  edit.addEventListener("click", () => openExpenseDialog(expense));
+
+  const remove = document.createElement("button");
+  remove.type = "button";
+  remove.className = "link-button link-button--danger";
+  remove.textContent = "Удалить";
+  remove.addEventListener("click", () => deleteExpense(expense, remove));
+
+  actions.append(edit, remove);
+  element.append(actions);
+
+  return element;
+}
+
+async function deleteExpense(expense, button) {
+  const label = expense.comment
+    ? `${formatMoney(expense.amount)} (${expense.comment})`
+    : formatMoney(expense.amount);
+
+  if (!window.confirm(`Удалить трату ${label}?`)) {
+    return;
+  }
+
+  button.disabled = true;
+
+  try {
+    await api(`${API}/expenses/${expense.id}`, { method: "DELETE" });
+    showToast("Трата удалена");
+    await loadExpenses();
+  } catch (error) {
+    showToast(`Не удалось удалить: ${formatError(error)}`);
+    button.disabled = false;
+  }
+}
+
 function renderRows() {
   els.body.replaceChildren();
 
@@ -418,6 +473,7 @@ function renderRows() {
       categoryCell(expense.category),
       cell("Комментарий", expense.comment || "—", "comment"),
       amountCell(expense.amount),
+      actionsCell(expense),
     );
     els.body.append(row);
   }
@@ -615,7 +671,7 @@ els.retry.addEventListener("click", () => {
 });
 
 els.add.addEventListener("click", () => {
-  openCreateDialog();
+  openExpenseDialog();
 });
 
 els.formCancel.addEventListener("click", () => {
@@ -624,6 +680,7 @@ els.formCancel.addEventListener("click", () => {
 
 els.dialog.addEventListener("close", () => {
   clearFormError();
+  state.editingId = null;
 });
 
 for (const input of Object.values(formInputs)) {
@@ -636,8 +693,9 @@ els.form.addEventListener("submit", async (event) => {
   event.preventDefault();
   clearFormError();
 
+  const editingId = state.editingId;
   const amount = normalizeAmount(els.formAmount.value);
-  if (!els.formUser.value) {
+  if (!editingId && !els.formUser.value) {
     showFieldError("user_id", "Выберите участника.");
     return;
   }
@@ -655,30 +713,34 @@ els.form.addEventListener("submit", async (event) => {
   }
 
   const payload = {
-    user_id: Number(els.formUser.value),
     amount,
     category: els.formCategory.value,
     spent_at: els.formDate.value,
     comment: els.formComment.value.trim(),
   };
+  if (!editingId) {
+    payload.user_id = Number(els.formUser.value);
+  }
 
   els.formSubmit.disabled = true;
   els.formSubmit.textContent = "Сохраняем…";
 
   try {
-    const created = await api(`${API}/expenses`, {
-      method: "POST",
+    const path = editingId ? `${API}/expenses/${editingId}` : `${API}/expenses`;
+    const method = editingId ? "PATCH" : "POST";
+    const saved = await api(path, {
+      method,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
 
     els.dialog.close();
-    state.highlightId = created.id;
-    showToast("Трата добавлена");
+    state.highlightId = saved.id;
+    showToast(editingId ? "Трата изменена" : "Трата добавлена");
     await loadExpenses();
 
     setTimeout(() => {
-      if (state.highlightId === created.id) {
+      if (state.highlightId === saved.id) {
         state.highlightId = null;
       }
     }, 2000);
