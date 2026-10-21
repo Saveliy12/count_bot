@@ -8,6 +8,7 @@ type Config interface {
 	Telegram() TelegramConfig
 	LLM() LLMConfig
 	TimeZone() *time.Location
+	SeedDemoUser() bool
 }
 
 type HTTPConfig interface {

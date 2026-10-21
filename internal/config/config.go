@@ -14,6 +14,7 @@ type config struct {
 	telegramConf TelegramConfig
 	llmConf      LLMConfig
 	timeZone     *time.Location
+	seedDemoUser bool
 }
 
 func New() (*config, error) {
@@ -42,12 +43,18 @@ func New() (*config, error) {
 		return nil, err
 	}
 
+	seedDemoUser, err := env.NewSeedDemoUser()
+	if err != nil {
+		return nil, err
+	}
+
 	return &config{
 		httpConf:     httpConf,
 		postgresConf: postgresConf,
 		telegramConf: telegramConf,
 		llmConf:      llmConf,
 		timeZone:     timeZone,
+		seedDemoUser: seedDemoUser,
 	}, nil
 }
 
@@ -69,4 +76,8 @@ func (c *config) LLM() LLMConfig {
 
 func (c *config) TimeZone() *time.Location {
 	return c.timeZone
+}
+
+func (c *config) SeedDemoUser() bool {
+	return c.seedDemoUser
 }

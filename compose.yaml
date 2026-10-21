@@ -38,6 +38,7 @@ services:
       LLM_BASE_URL: ${LLM_BASE_URL:-https://api.groq.com/openai/v1}
       LLM_TIMEOUT: ${LLM_TIMEOUT:-20s}
       TIMEZONE: ${TIMEZONE:-Europe/Moscow}
+      SEED_DEMO_USER: ${SEED_DEMO_USER:-true}
     ports:
       - "127.0.0.1:${APP_HOST_PORT:-8083}:8083"
     healthcheck:

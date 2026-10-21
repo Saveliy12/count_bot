@@ -11,6 +11,7 @@ func TestNew(t *testing.T) {
 	t.Setenv("LLM_BASE_URL", "")
 	t.Setenv("LLM_TIMEOUT", "")
 	t.Setenv("TIMEZONE", "")
+	t.Setenv("SEED_DEMO_USER", "")
 
 	t.Run("requires database URL", func(t *testing.T) {
 		t.Setenv("DATABASE_URL", "")
@@ -177,6 +178,40 @@ func TestNew(t *testing.T) {
 
 		if _, err := New(); err == nil {
 			t.Fatal("expected an error for an invalid timezone")
+		}
+	})
+
+	t.Run("demo user is disabled by default", func(t *testing.T) {
+		t.Setenv("DATABASE_URL", "postgres://example")
+
+		cfg, err := New()
+		if err != nil {
+			t.Fatalf("load config: %v", err)
+		}
+		if cfg.SeedDemoUser() {
+			t.Fatal("expected demo user seeding to be disabled")
+		}
+	})
+
+	t.Run("demo user can be enabled", func(t *testing.T) {
+		t.Setenv("DATABASE_URL", "postgres://example")
+		t.Setenv("SEED_DEMO_USER", "true")
+
+		cfg, err := New()
+		if err != nil {
+			t.Fatalf("load config: %v", err)
+		}
+		if !cfg.SeedDemoUser() {
+			t.Fatal("expected demo user seeding to be enabled")
+		}
+	})
+
+	t.Run("rejects invalid demo user flag", func(t *testing.T) {
+		t.Setenv("DATABASE_URL", "postgres://example")
+		t.Setenv("SEED_DEMO_USER", "maybe")
+
+		if _, err := New(); err == nil {
+			t.Fatal("expected an error for an invalid SEED_DEMO_USER")
 		}
 	})
 }

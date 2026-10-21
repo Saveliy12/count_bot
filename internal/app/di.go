@@ -13,6 +13,7 @@ import (
 	"github.com/Saveliy12/expenses/internal/config"
 	"github.com/Saveliy12/expenses/internal/llm"
 	"github.com/Saveliy12/expenses/internal/migrator"
+	"github.com/Saveliy12/expenses/internal/model"
 	"github.com/Saveliy12/expenses/internal/repository"
 	repositoryexpense "github.com/Saveliy12/expenses/internal/repository/expense"
 	repositoryfamily "github.com/Saveliy12/expenses/internal/repository/family"
@@ -27,6 +28,7 @@ const (
 	readTimeout       = 10 * time.Second
 	writeTimeout      = 15 * time.Second
 	idleTimeout       = 60 * time.Second
+	demoTelegramID    = 900000000001
 )
 
 type serviceProvider struct {
@@ -169,6 +171,41 @@ func (sp *serviceProvider) TextProcessor(ctx context.Context) (botrunner.TextPro
 	}
 
 	return sp.textProcessor, nil
+}
+
+func (sp *serviceProvider) SeedDemoUser(ctx context.Context) error {
+	cfg, err := sp.Config()
+	if err != nil {
+		return err
+	}
+	if !cfg.SeedDemoUser() {
+		return nil
+	}
+
+	expenseService, err := sp.ExpenseService(ctx)
+	if err != nil {
+		return err
+	}
+
+	users, err := expenseService.ListFamilyUsers(ctx)
+	if err != nil {
+		return err
+	}
+	if len(users) > 0 {
+		return nil
+	}
+
+	if _, err := expenseService.EnsureUser(ctx, model.UserProfile{
+		TelegramID:  demoTelegramID,
+		DisplayName: "Демо-пользователь",
+		Username:    "demo",
+	}); err != nil {
+		return fmt.Errorf("seed demo user: %w", err)
+	}
+
+	slog.Info("demo user seeded", "telegram_id", demoTelegramID)
+
+	return nil
 }
 
 func (sp *serviceProvider) TelegramBot(ctx context.Context) (*botrunner.Runner, error) {

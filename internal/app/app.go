@@ -43,6 +43,10 @@ func (a *App) Run(ctx context.Context) error {
 		return err
 	}
 
+	if err := a.serviceProvider.SeedDemoUser(ctx); err != nil {
+		return err
+	}
+
 	runCtx, cancelRun := context.WithCancel(ctx)
 	defer cancelRun()
 
