@@ -36,6 +36,7 @@ const state = {
   offset: 0,
   loading: false,
   requestId: 0,
+  highlightId: null,
   filters: {
     userId: "",
     category: "",
@@ -66,7 +67,28 @@ const els = {
   loadMore: document.querySelector("#load-more"),
   retry: document.querySelector("#retry"),
   listPanel: document.querySelector("#list-panel"),
+  dialog: document.querySelector("#expense-dialog"),
+  form: document.querySelector("#expense-form"),
+  formUser: document.querySelector("#form-user"),
+  formAmount: document.querySelector("#form-amount"),
+  formCategory: document.querySelector("#form-category"),
+  formDate: document.querySelector("#form-date"),
+  formComment: document.querySelector("#form-comment"),
+  formError: document.querySelector("#form-error"),
+  formSubmit: document.querySelector("#form-submit"),
+  formCancel: document.querySelector("#form-cancel"),
+  toast: document.querySelector("#toast"),
 };
+
+const formInputs = {
+  user_id: els.formUser,
+  amount: els.formAmount,
+  category: els.formCategory,
+  spent_at: els.formDate,
+  comment: els.formComment,
+};
+
+let toastTimer = 0;
 
 async function api(path, options = {}) {
   const response = await fetch(path, options);
@@ -227,6 +249,96 @@ function formatError(error) {
   return error?.body?.error?.message || error?.message || "Неизвестная ошибка.";
 }
 
+function showToast(message) {
+  els.toast.textContent = message;
+  els.toast.classList.add("toast--visible");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => {
+    els.toast.classList.remove("toast--visible");
+  }, 3000);
+}
+
+function normalizeAmount(raw) {
+  const value = raw.trim().replace(/\s+/g, "").replace(",", ".");
+  if (!/^\d+(\.\d{1,2})?$/.test(value)) {
+    return null;
+  }
+
+  const number = Number(value);
+  if (!Number.isFinite(number) || number <= 0 || number > 9999999999.99) {
+    return null;
+  }
+
+  return value;
+}
+
+function clearFormError() {
+  els.formError.hidden = true;
+  els.formError.textContent = "";
+  for (const input of Object.values(formInputs)) {
+    input.removeAttribute("aria-invalid");
+  }
+}
+
+function showFieldError(field, message) {
+  els.formError.textContent = message;
+  els.formError.hidden = false;
+
+  const input = formInputs[field];
+  if (input) {
+    input.setAttribute("aria-invalid", "true");
+    input.focus();
+  }
+}
+
+function showFormError(error) {
+  const field = error?.body?.error?.field;
+  const message = fieldMessages[field] ||
+    error?.body?.error?.message ||
+    error?.message ||
+    "Не удалось сохранить трату.";
+
+  if (field && formInputs[field]) {
+    showFieldError(field, message);
+    return;
+  }
+
+  els.formError.textContent = message;
+  els.formError.hidden = false;
+}
+
+function openCreateDialog() {
+  if (!state.users.length) {
+    showToast("Нет участников. Напишите боту /start.");
+    return;
+  }
+
+  els.form.reset();
+  fillSelect(
+    els.formUser,
+    "Выберите участника",
+    state.users,
+    (user) => user.telegram_id,
+    (user) => user.display_name || `Пользователь ${user.telegram_id}`,
+  );
+  fillSelect(
+    els.formCategory,
+    "Выберите категорию",
+    state.categories,
+    (category) => category.value,
+    (category) => category.label,
+  );
+
+  els.formUser.value = state.filters.userId || String(state.users[0].telegram_id);
+  els.formCategory.value = state.filters.category || "";
+  els.formDate.value = localDate();
+  els.formComment.value = "";
+  clearFormError();
+
+  els.dialog.showModal();
+  els.formAmount.focus();
+}
+
 function fillSelect(select, placeholder, items, valueOf, labelOf) {
   const current = select.value;
   select.replaceChildren(new Option(placeholder, ""));
@@ -297,6 +409,9 @@ function renderRows() {
 
   for (const expense of state.items) {
     const row = document.createElement("tr");
+    if (expense.id === state.highlightId) {
+      row.classList.add("row--new");
+    }
     row.append(
       cell("Дата", formatDate(expense.spent_at)),
       memberCell(expense.user_id),
@@ -442,6 +557,7 @@ async function init() {
 
     els.member.value = state.filters.userId;
     els.category.value = state.filters.category;
+    els.add.disabled = state.users.length === 0;
     await loadExpenses();
   } catch (error) {
     els.total.textContent = "— ₽";
@@ -496,6 +612,82 @@ els.loadMore.addEventListener("click", () => {
 
 els.retry.addEventListener("click", () => {
   init();
+});
+
+els.add.addEventListener("click", () => {
+  openCreateDialog();
+});
+
+els.formCancel.addEventListener("click", () => {
+  els.dialog.close();
+});
+
+els.dialog.addEventListener("close", () => {
+  clearFormError();
+});
+
+for (const input of Object.values(formInputs)) {
+  input.addEventListener("input", () => {
+    input.removeAttribute("aria-invalid");
+  });
+}
+
+els.form.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  clearFormError();
+
+  const amount = normalizeAmount(els.formAmount.value);
+  if (!els.formUser.value) {
+    showFieldError("user_id", "Выберите участника.");
+    return;
+  }
+  if (!amount) {
+    showFieldError("amount", "Введите положительную сумму с максимум двумя знаками после запятой.");
+    return;
+  }
+  if (!els.formCategory.value) {
+    showFieldError("category", "Выберите категорию.");
+    return;
+  }
+  if (!els.formDate.value) {
+    showFieldError("spent_at", "Выберите дату.");
+    return;
+  }
+
+  const payload = {
+    user_id: Number(els.formUser.value),
+    amount,
+    category: els.formCategory.value,
+    spent_at: els.formDate.value,
+    comment: els.formComment.value.trim(),
+  };
+
+  els.formSubmit.disabled = true;
+  els.formSubmit.textContent = "Сохраняем…";
+
+  try {
+    const created = await api(`${API}/expenses`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    els.dialog.close();
+    state.highlightId = created.id;
+    showToast("Трата добавлена");
+    await loadExpenses();
+
+    setTimeout(() => {
+      if (state.highlightId === created.id) {
+        state.highlightId = null;
+      }
+    }, 2000);
+  } catch (error) {
+    showFormError(error);
+  } finally {
+    els.formSubmit.disabled = false;
+    els.formSubmit.textContent = "Сохранить";
+  }
 });
 
 init();

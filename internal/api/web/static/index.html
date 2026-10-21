@@ -15,7 +15,7 @@
         <h1>Расходы</h1>
         <p class="lede">Все траты семьи в одном месте.</p>
       </div>
-      <button class="button" id="add-expense" type="button" disabled>Добавить трату</button>
+      <button class="button" id="add-expense" type="button" disabled aria-haspopup="dialog">Добавить трату</button>
     </header>
 
     <section class="receipt" aria-live="polite">
@@ -104,6 +104,51 @@
       </div>
     </section>
   </main>
+
+  <dialog class="dialog" id="expense-dialog" aria-labelledby="expense-dialog-title">
+    <form class="expense-form" id="expense-form" novalidate>
+      <div class="dialog-head">
+        <p class="eyebrow">Новая запись</p>
+        <h2 id="expense-dialog-title">Добавить трату</h2>
+      </div>
+
+      <div class="form-grid">
+        <label class="field">
+          <span>Участник</span>
+          <select id="form-user" required></select>
+        </label>
+
+        <label class="field">
+          <span>Сумма</span>
+          <input id="form-amount" type="text" inputmode="decimal" autocomplete="off" placeholder="350,50" required>
+        </label>
+
+        <label class="field">
+          <span>Категория</span>
+          <select id="form-category" required></select>
+        </label>
+
+        <label class="field">
+          <span>Дата</span>
+          <input id="form-date" type="date" required>
+        </label>
+
+        <label class="field form-comment">
+          <span>Комментарий</span>
+          <input id="form-comment" type="text" maxlength="500" placeholder="кофе">
+        </label>
+      </div>
+
+      <p class="form-error" id="form-error" role="alert" hidden></p>
+
+      <div class="dialog-actions">
+        <button class="button button--ghost" type="button" id="form-cancel">Отмена</button>
+        <button class="button" type="submit" id="form-submit">Сохранить</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
   <script src="/static/app.js" defer></script>
 </body>
