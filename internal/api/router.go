@@ -27,6 +27,7 @@ func NewRouter(
 	mux.HandleFunc("/readyz", httpx.AllowMethods(healthHandler.Ready, http.MethodGet))
 
 	mux.HandleFunc("/api/v1/users", httpx.AllowMethods(panelAPI.ListUsers, http.MethodGet))
+	mux.HandleFunc("/api/v1/categories", httpx.AllowMethods(panelAPI.ListCategories, http.MethodGet))
 	mux.HandleFunc("/api/v1/expenses", httpx.AllowMethods(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:

@@ -173,6 +173,7 @@ func newAPITestHandler(service *stubPanelService) http.Handler {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v1/users", httpx.AllowMethods(api.ListUsers, http.MethodGet))
+	mux.HandleFunc("/api/v1/categories", httpx.AllowMethods(api.ListCategories, http.MethodGet))
 	mux.HandleFunc("/api/v1/expenses", httpx.AllowMethods(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
@@ -216,6 +217,38 @@ func TestListUsersAPI(t *testing.T) {
 	}
 	if len(body.Items) != 1 || body.Items[0].TelegramID != 42 {
 		t.Fatalf("unexpected users response: %+v", body)
+	}
+}
+
+func TestListCategoriesAPI(t *testing.T) {
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/categories", nil)
+	response := httptest.NewRecorder()
+
+	newAPITestHandler(&stubPanelService{}).ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", response.Code)
+	}
+
+	var body categoriesResponse
+	if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(body.Items) != 14 {
+		t.Fatalf("expected 14 categories, got %d", len(body.Items))
+	}
+
+	foundFood := false
+	for _, category := range body.Items {
+		if category.Value == string(model.CategoryFood) {
+			foundFood = true
+			if category.Label != "еда" {
+				t.Fatalf("unexpected food label %q", category.Label)
+			}
+		}
+	}
+	if !foundFood {
+		t.Fatal("expected the food category")
 	}
 }
 

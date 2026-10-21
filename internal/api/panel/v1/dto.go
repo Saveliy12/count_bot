@@ -30,6 +30,15 @@ type userResponse struct {
 	Username    string `json:"username"`
 }
 
+type categoryResponse struct {
+	Value string `json:"value"`
+	Label string `json:"label"`
+}
+
+type categoriesResponse struct {
+	Items []categoryResponse `json:"items"`
+}
+
 type expensesResponse struct {
 	Items   []expenseResponse `json:"items"`
 	HasMore bool              `json:"has_more"`
