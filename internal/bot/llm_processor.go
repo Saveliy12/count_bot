@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"strings"
 	"time"
 
@@ -22,6 +23,7 @@ const (
 	displayedCommentLimit = 80
 	targetSearchPageSize  = model.MaxPageSize
 	targetSearchMaxPages  = 5
+	targetCandidateLimit  = 5
 )
 
 var (
@@ -31,6 +33,18 @@ var (
 	errTargetTooBroad    = errors.New("target search is too broad")
 	errTargetInvalidDate = errors.New("target date is invalid")
 )
+
+type ambiguousTargetError struct {
+	matches []model.Expense
+}
+
+func (e *ambiguousTargetError) Error() string {
+	return "target is ambiguous"
+}
+
+func (e *ambiguousTargetError) Unwrap() error {
+	return errTargetAmbiguous
+}
 
 type LLMProcessor struct {
 	provider llm.Provider
@@ -64,6 +78,10 @@ func NewLLMProcessor(
 	}
 }
 
+func (p *LLMProcessor) ResetPending(telegramID int64) {
+	p.pending.clear(telegramID)
+}
+
 func (p *LLMProcessor) Process(ctx context.Context, actor model.Actor, text string) (string, error) {
 	text = strings.TrimSpace(text)
 	if text == "" {
@@ -82,6 +100,14 @@ func (p *LLMProcessor) Process(ctx context.Context, actor model.Actor, text stri
 			}
 		case pendingKindClarification:
 			text = clarificationContext(state, text)
+		case pendingKindTargetSelection:
+			reply, handled, err := p.selectTarget(ctx, actor, state, text, now)
+			if err != nil {
+				return "", err
+			}
+			if handled {
+				return reply, nil
+			}
 		}
 	}
 
@@ -231,19 +257,6 @@ func (p *LLMProcessor) update(
 	intent llm.Intent,
 	now time.Time,
 ) (string, error) {
-	target, err := p.resolveTarget(ctx, actor, intent, now)
-	if err != nil {
-		return p.targetFailure(err)
-	}
-	if intent.OldAmount != nil && !target.Amount.Equal(*intent.OldAmount) {
-		return fmt.Sprintf(
-			"У траты #%d сумма %s, а не %s. Уточни, какую трату изменить.",
-			target.ID,
-			formatMoney(target.Amount),
-			formatMoney(*intent.OldAmount),
-		), nil
-	}
-
 	patch := model.UpdateExpenseInput{
 		Amount:   intent.Amount,
 		Category: intent.Category,
@@ -264,6 +277,22 @@ func (p *LLMProcessor) update(
 		return "Что именно изменить: сумму, категорию, дату или комментарий?", nil
 	}
 
+	target, err := p.resolveTarget(ctx, actor, intent, now)
+	if err != nil {
+		if reply, ok := p.handleAmbiguousTarget(actor, err, intent, patch, now); ok {
+			return reply, nil
+		}
+		return p.targetFailure(err)
+	}
+	if intent.OldAmount != nil && !target.Amount.Equal(*intent.OldAmount) {
+		return fmt.Sprintf(
+			"У траты #%d сумма %s, а не %s. Уточни, какую трату изменить.",
+			target.ID,
+			formatMoney(target.Amount),
+			formatMoney(*intent.OldAmount),
+		), nil
+	}
+
 	updated, err := p.expenses.UpdateExpense(ctx, actor, target.ID, patch)
 	if err != nil {
 		return p.fail("update", err)
@@ -280,6 +309,9 @@ func (p *LLMProcessor) delete(
 ) (string, error) {
 	target, err := p.resolveTarget(ctx, actor, intent, now)
 	if err != nil {
+		if reply, ok := p.handleAmbiguousTarget(actor, err, intent, model.UpdateExpenseInput{}, now); ok {
+			return reply, nil
+		}
 		return p.targetFailure(err)
 	}
 
@@ -370,7 +402,7 @@ func (p *LLMProcessor) resolveTarget(
 		case 1:
 			return matches[0], nil
 		default:
-			return model.Expense{}, errTargetAmbiguous
+			return model.Expense{}, &ambiguousTargetError{matches: matches}
 		}
 	default:
 		return model.Expense{}, errTargetMissing
@@ -410,7 +442,7 @@ func (p *LLMProcessor) findTargetMatches(
 				continue
 			}
 			matches = append(matches, expense)
-			if len(matches) > 1 {
+			if len(matches) >= targetCandidateLimit {
 				return matches, nil
 			}
 		}
@@ -446,6 +478,121 @@ func targetFilter(intent llm.Intent, now time.Time) (model.ExpenseFilter, error)
 	filter.Category = intent.TargetCategory
 
 	return filter, nil
+}
+
+func (p *LLMProcessor) handleAmbiguousTarget(
+	actor model.Actor,
+	err error,
+	intent llm.Intent,
+	patch model.UpdateExpenseInput,
+	now time.Time,
+) (string, bool) {
+	var ambiguous *ambiguousTargetError
+	if !errors.As(err, &ambiguous) {
+		return "", false
+	}
+
+	p.pending.putTargetSelection(actor.TelegramID, ambiguous.matches, intent.Action, patch, now)
+
+	return p.ambiguousMessage(ambiguous.matches, intent), true
+}
+
+func (p *LLMProcessor) ambiguousMessage(matches []model.Expense, intent llm.Intent) string {
+	var builder strings.Builder
+	builder.WriteString("Нашёл несколько трат:")
+	for _, expense := range matches {
+		fmt.Fprintf(
+			&builder,
+			"\n• #%d %s — %s, %s%s",
+			expense.ID,
+			formatDisplayDate(expense.SpentAt),
+			formatMoney(expense.Amount),
+			expense.Category.Label(),
+			commentSuffix(expense.Comment),
+		)
+	}
+
+	builder.WriteString("\nНапиши номер из списка: 6.")
+
+	if intent.Action == llm.ActionUpdate {
+		example := "измени такси 20.10.2026"
+		if intent.Amount != nil {
+			example += " на " + formatMoney(*intent.Amount)
+		}
+		builder.WriteString(" Или уточни дату: " + example + ".")
+	} else {
+		builder.WriteString(" Или уточни дату: удали такси 20.10.2026.")
+	}
+
+	return builder.String()
+}
+
+func (p *LLMProcessor) selectTarget(
+	ctx context.Context,
+	actor model.Actor,
+	state pendingState,
+	text string,
+	now time.Time,
+) (string, bool, error) {
+	if isNo(text) {
+		return "Отменил выбор.", true, nil
+	}
+	if isYes(text) {
+		return "Сначала выбери номер траты из списка.", true, nil
+	}
+
+	id, ok := targetSelectionID(text)
+	if !ok {
+		return "", false, nil
+	}
+
+	var selected *model.Expense
+	for index := range state.candidates {
+		if state.candidates[index].ID == id {
+			selected = &state.candidates[index]
+			break
+		}
+	}
+	if selected == nil {
+		p.pending.putTargetSelection(actor.TelegramID, state.candidates, state.action, state.patch, now)
+		return fmt.Sprintf(
+			"В списке нет траты #%d. Напиши номер из списка или «отмена».",
+			id,
+		), true, nil
+	}
+
+	switch state.action {
+	case llm.ActionDelete:
+		p.pending.putDeletion(actor.TelegramID, *selected, now)
+		return fmt.Sprintf(
+			"Удалить: %s? Напиши «да» или «нет».",
+			expenseDescription(*selected),
+		), true, nil
+	case llm.ActionUpdate:
+		updated, err := p.expenses.UpdateExpense(ctx, actor, selected.ID, state.patch)
+		if err != nil {
+			reply, failure := p.fail("update", err)
+			return reply, true, failure
+		}
+		return "Изменил: " + expenseDescription(updated) + ".", true, nil
+	default:
+		return "", false, nil
+	}
+}
+
+func targetSelectionID(text string) (int64, bool) {
+	value := strings.ToLower(strings.TrimSpace(text))
+	value = strings.TrimPrefix(value, "номер")
+	value = strings.TrimSpace(value)
+	value = strings.TrimPrefix(value, "#")
+	value = strings.TrimSpace(value)
+
+	id, err := strconv.ParseInt(value, 10, 64)
+	if err != nil || id <= 0 {
+		return 0, false
+	}
+
+	return id, true
 }
 
 func (p *LLMProcessor) targetFailure(err error) (string, error) {
@@ -501,6 +648,9 @@ func periodRange(intent llm.Intent, now time.Time) (time.Time, time.Time, string
 		case to.IsZero():
 			return from, today, "с " + from.Format(displayDateLayout), nil
 		default:
+			if from.Equal(to) {
+				return from, to, from.Format(displayDateLayout), nil
+			}
 			return from, to, from.Format(displayDateLayout) + " — " + to.Format(displayDateLayout), nil
 		}
 	}

@@ -26,6 +26,9 @@ type evalExpectation struct {
 	targetQuery    string
 	targetDateHint string
 	targetCategory model.Category
+	targetID       int64
+	periodFrom     string
+	periodTo       string
 	periodPreset   PeriodPreset
 	clearComment   *bool
 }
@@ -83,6 +86,7 @@ func TestModelEvaluation(t *testing.T) {
 		{name: "week", text: "покажи траты за неделю", want: evalExpectation{action: ActionList, periodPreset: PeriodWeek}},
 		{name: "today", text: "траты за сегодня", want: evalExpectation{action: ActionList, periodPreset: PeriodToday}},
 		{name: "year", text: "сколько потратил за год", want: evalExpectation{action: ActionList, periodPreset: PeriodYear}},
+		{name: "list exact date", text: "покажи траты за 20.10.2026", want: evalExpectation{action: ActionList, periodFrom: "2026-10-20", periodTo: "2026-10-20"}},
 		{name: "delete taxi yesterday", text: "удали такси вчера", want: evalExpectation{action: ActionDelete, targetMode: TargetQuery, targetQuery: "такси", targetDateHint: "yesterday"}},
 		{name: "delete yesterday food", text: "удали вчерашние траты на еду", want: evalExpectation{action: ActionDelete, targetMode: TargetQuery, targetCategory: model.CategoryFood, targetDateHint: "yesterday"}},
 		{name: "update taxi yesterday", text: "измени такси вчера на 1300", want: evalExpectation{action: ActionUpdate, amount: "1300", targetMode: TargetQuery, targetQuery: "такси", targetDateHint: "yesterday"}},
@@ -92,7 +96,9 @@ func TestModelEvaluation(t *testing.T) {
 		{name: "clear comment", text: "убери комментарий у последнего", want: evalExpectation{action: ActionUpdate, targetMode: TargetLatest, clearComment: boolPtr(true)}},
 		{name: "delete latest", text: "удали последнее", want: evalExpectation{action: ActionDelete, targetMode: TargetLatest}},
 		{name: "delete taxi", text: "удали такси", want: evalExpectation{action: ActionDelete, targetMode: TargetQuery, targetQuery: "такси"}},
-		{name: "delete by id", text: "удали трату 5", want: evalExpectation{action: ActionDelete, targetMode: TargetID}},
+		{name: "delete by id", text: "удали трату 5", want: evalExpectation{action: ActionDelete, targetMode: TargetID, targetID: 5}},
+		{name: "delete taxi exact date", text: "удали такси 20.10.2026", want: evalExpectation{action: ActionDelete, targetMode: TargetQuery, targetQuery: "такси", targetDateHint: "2026-10-20"}},
+		{name: "delete bare id", text: "удали 6", want: evalExpectation{action: ActionDelete, targetMode: TargetID, targetID: 6}},
 		{name: "clarify empty expense", text: "запиши трату", want: evalExpectation{action: ActionClarify}},
 		{name: "clarify no amount", text: "потратил", want: evalExpectation{action: ActionClarify}},
 		{name: "clarify no amount with comment", text: "кофе", want: evalExpectation{action: ActionClarify}},
@@ -176,6 +182,24 @@ func TestModelEvaluation(t *testing.T) {
 		if test.want.targetCategory != "" {
 			if intent.TargetCategory == nil || *intent.TargetCategory != test.want.targetCategory {
 				t.Errorf("%s: target category: got %v, want %q", test.name, intent.TargetCategory, test.want.targetCategory)
+				ok = false
+			}
+		}
+		if test.want.targetID != 0 {
+			if intent.TargetID == nil || *intent.TargetID != test.want.targetID {
+				t.Errorf("%s: target id: got %v, want %d", test.name, intent.TargetID, test.want.targetID)
+				ok = false
+			}
+		}
+		if test.want.periodFrom != "" {
+			if intent.PeriodFrom == nil || intent.PeriodFrom.Format(dateLayout) != test.want.periodFrom {
+				t.Errorf("%s: period from: got %v, want %q", test.name, intent.PeriodFrom, test.want.periodFrom)
+				ok = false
+			}
+		}
+		if test.want.periodTo != "" {
+			if intent.PeriodTo == nil || intent.PeriodTo.Format(dateLayout) != test.want.periodTo {
+				t.Errorf("%s: period to: got %v, want %q", test.name, intent.PeriodTo, test.want.periodTo)
 				ok = false
 			}
 		}

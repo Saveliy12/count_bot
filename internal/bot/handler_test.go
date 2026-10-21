@@ -31,11 +31,16 @@ func (f *fakeRegistrar) EnsureUser(_ context.Context, profile model.UserProfile)
 }
 
 type fakeProcessor struct {
-	actor model.Actor
-	text  string
-	reply string
-	err   error
-	calls int
+	actor      model.Actor
+	text       string
+	reply      string
+	err        error
+	calls      int
+	resetCalls int
+}
+
+func (f *fakeProcessor) ResetPending(int64) {
+	f.resetCalls++
 }
 
 func (f *fakeProcessor) Process(_ context.Context, actor model.Actor, text string) (string, error) {
@@ -106,6 +111,9 @@ func TestStartCommand(t *testing.T) {
 	if processor.calls != 0 {
 		t.Fatalf("processor must not be called for /start, got %d calls", processor.calls)
 	}
+	if processor.resetCalls != 1 {
+		t.Fatalf("expected pending reset on /start, got %d", processor.resetCalls)
+	}
 }
 
 func TestUnknownCommand(t *testing.T) {
@@ -126,6 +134,9 @@ func TestUnknownCommand(t *testing.T) {
 	}
 	if processor.calls != 0 {
 		t.Fatalf("processor must not be called for unknown commands, got %d calls", processor.calls)
+	}
+	if processor.resetCalls != 1 {
+		t.Fatalf("expected pending reset on unknown command, got %d", processor.resetCalls)
 	}
 }
 

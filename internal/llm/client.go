@@ -420,11 +420,23 @@ func parseDateHintPointer(raw *string, field string) (*string, error) {
 	case "today", "yesterday":
 		return &normalized, nil
 	default:
-		if _, err := time.Parse(dateLayout, *value); err != nil {
+		date, ok := normalizeDateString(*value)
+		if !ok {
 			return nil, fmt.Errorf("%w: invalid %s %q", ErrInvalidResponse, field, *value)
 		}
-		return value, nil
+		return &date, nil
 	}
+}
+
+func normalizeDateString(value string) (string, bool) {
+	for _, layout := range []string{dateLayout, "02.01.2006", "2.1.2006"} {
+		date, err := time.Parse(layout, value)
+		if err == nil {
+			return date.Format(dateLayout), true
+		}
+	}
+
+	return "", false
 }
 
 func parseDatePointer(raw *string, field string) (*time.Time, error) {
@@ -433,7 +445,12 @@ func parseDatePointer(raw *string, field string) (*time.Time, error) {
 		return nil, nil
 	}
 
-	date, err := time.Parse(dateLayout, *value)
+	normalized, ok := normalizeDateString(*value)
+	if !ok {
+		return nil, fmt.Errorf("%w: invalid %s %q", ErrInvalidResponse, field, *value)
+	}
+
+	date, err := time.Parse(dateLayout, normalized)
 	if err != nil {
 		return nil, fmt.Errorf("%w: invalid %s %q", ErrInvalidResponse, field, *value)
 	}

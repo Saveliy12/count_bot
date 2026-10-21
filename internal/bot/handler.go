@@ -13,6 +13,10 @@ type UserRegistrar interface {
 	EnsureUser(ctx context.Context, profile model.UserProfile) (model.User, error)
 }
 
+type pendingResetter interface {
+	ResetPending(telegramID int64)
+}
+
 type Message struct {
 	TelegramID int64
 	Username   string
@@ -57,9 +61,11 @@ func (h *Handler) Handle(ctx context.Context, message Message) string {
 	}
 
 	if isStartCommand(text) {
+		h.resetPending(message.TelegramID)
 		return Welcome
 	}
 	if strings.HasPrefix(text, "/") {
+		h.resetPending(message.TelegramID)
 		return UnknownCommand
 	}
 
@@ -70,6 +76,12 @@ func (h *Handler) Handle(ctx context.Context, message Message) string {
 	}
 
 	return strings.TrimSpace(reply)
+}
+
+func (h *Handler) resetPending(telegramID int64) {
+	if resetter, ok := h.processor.(pendingResetter); ok {
+		resetter.ResetPending(telegramID)
+	}
 }
 
 func (h *Handler) ensureUser(ctx context.Context, message Message) (model.User, error) {

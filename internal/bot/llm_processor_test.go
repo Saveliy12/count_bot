@@ -792,6 +792,124 @@ func TestLLMProcessorUpdateLatestFiltered(t *testing.T) {
 	}
 }
 
+func TestLLMProcessorAmbiguousDeleteSelection(t *testing.T) {
+	provider := &fakeIntentProvider{intent: llm.Intent{
+		Action:      llm.ActionDelete,
+		TargetMode:  llm.TargetQuery,
+		TargetQuery: stringPtr("такси"),
+	}}
+	expenses := &fakeExpenseService{
+		listFn: func(context.Context, model.Actor, model.ExpenseFilter) (model.ExpensePage, error) {
+			return model.ExpensePage{Items: []model.Expense{
+				{ID: 6, Amount: decimal.NewFromInt(1235), Category: model.CategoryTransport, SpentAt: testDate(2026, 10, 20), Comment: "такси"},
+				{ID: 4, Amount: decimal.NewFromInt(900), Category: model.CategoryTransport, SpentAt: testDate(2026, 10, 18), Comment: "такси"},
+				{ID: 7, Amount: decimal.NewFromInt(350), Category: model.CategoryFood, SpentAt: testDate(2026, 10, 21), Comment: "кофе"},
+			}}, nil
+		},
+		deleteIfUnchangedFn: func(_ context.Context, _ model.Actor, expense model.Expense) error {
+			if expense.ID != 6 {
+				t.Fatalf("expected selected ID 6, got %d", expense.ID)
+			}
+			return nil
+		},
+	}
+
+	processor := newTestLLMProcessor(provider, expenses)
+	reply, err := processor.Process(context.Background(), model.Actor{TelegramID: 42}, "удали такси")
+	if err != nil {
+		t.Fatalf("ambiguity response: %v", err)
+	}
+	if !strings.Contains(reply, "Нашёл несколько") ||
+		!strings.Contains(reply, "#6") ||
+		!strings.Contains(reply, "#4") ||
+		!strings.Contains(reply, "Напиши номер") {
+		t.Fatalf("expected candidates in reply, got %q", reply)
+	}
+
+	reply, err = processor.Process(context.Background(), model.Actor{TelegramID: 42}, "6")
+	if err != nil {
+		t.Fatalf("select target: %v", err)
+	}
+	if !strings.Contains(reply, "Удалить") || !strings.Contains(reply, "такси") {
+		t.Fatalf("expected delete confirmation, got %q", reply)
+	}
+
+	reply, err = processor.Process(context.Background(), model.Actor{TelegramID: 42}, "да")
+	if err != nil {
+		t.Fatalf("confirm delete: %v", err)
+	}
+	if !strings.Contains(reply, "Удалил") {
+		t.Fatalf("expected deletion result, got %q", reply)
+	}
+}
+
+func TestLLMProcessorAmbiguousUpdateSelection(t *testing.T) {
+	provider := &fakeIntentProvider{intent: llm.Intent{
+		Action:      llm.ActionUpdate,
+		Amount:      decimalPtr("500"),
+		TargetMode:  llm.TargetQuery,
+		TargetQuery: stringPtr("такси"),
+	}}
+	expenses := &fakeExpenseService{
+		listFn: func(context.Context, model.Actor, model.ExpenseFilter) (model.ExpensePage, error) {
+			return model.ExpensePage{Items: []model.Expense{
+				{ID: 6, Amount: decimal.NewFromInt(1235), Category: model.CategoryTransport, SpentAt: testDate(2026, 10, 20), Comment: "такси"},
+				{ID: 4, Amount: decimal.NewFromInt(900), Category: model.CategoryTransport, SpentAt: testDate(2026, 10, 18), Comment: "такси"},
+			}}, nil
+		},
+		updateFn: func(
+			_ context.Context,
+			_ model.Actor,
+			id int64,
+			patch model.UpdateExpenseInput,
+		) (model.Expense, error) {
+			if id != 4 {
+				t.Fatalf("expected selected ID 4, got %d", id)
+			}
+			if patch.Amount == nil || !patch.Amount.Equal(decimal.NewFromInt(500)) {
+				t.Fatalf("unexpected amount patch %v", patch.Amount)
+			}
+			return model.Expense{
+				ID:       4,
+				Amount:   *patch.Amount,
+				Category: model.CategoryTransport,
+				SpentAt:  testDate(2026, 10, 18),
+				Comment:  "такси",
+			}, nil
+		},
+	}
+
+	processor := newTestLLMProcessor(provider, expenses)
+	reply, err := processor.Process(context.Background(), model.Actor{TelegramID: 42}, "измени такси на 500")
+	if err != nil {
+		t.Fatalf("ambiguity response: %v", err)
+	}
+	if !strings.Contains(reply, "Нашёл несколько") || !strings.Contains(reply, "#4") {
+		t.Fatalf("expected candidates in reply, got %q", reply)
+	}
+
+	reply, err = processor.Process(context.Background(), model.Actor{TelegramID: 42}, "4")
+	if err != nil {
+		t.Fatalf("select target: %v", err)
+	}
+	if !strings.Contains(reply, "Изменил") || !strings.Contains(reply, "500") {
+		t.Fatalf("expected update result, got %q", reply)
+	}
+}
+
+func TestPeriodRangeSingleDate(t *testing.T) {
+	date := testDate(2026, 10, 20)
+	intent := llm.Intent{PeriodFrom: &date, PeriodTo: &date}
+
+	_, _, label, err := periodRange(intent, testDate(2026, 10, 21))
+	if err != nil {
+		t.Fatalf("period range: %v", err)
+	}
+	if label != "20.10.2026" {
+		t.Fatalf("expected a single date label, got %q", label)
+	}
+}
+
 func TestLLMProcessorUpdateOldAmountMismatch(t *testing.T) {
 	provider := &fakeIntentProvider{intent: llm.Intent{
 		Action:     llm.ActionUpdate,

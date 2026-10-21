@@ -317,6 +317,26 @@ func TestClientParseTargetFilters(t *testing.T) {
 	}
 }
 
+func TestParseDateHints(t *testing.T) {
+	value := "20.10.2026"
+
+	hint, err := parseDateHintPointer(&value, "date_hint")
+	if err != nil {
+		t.Fatalf("parse date hint: %v", err)
+	}
+	if hint == nil || *hint != "2026-10-20" {
+		t.Fatalf("unexpected date hint %v", hint)
+	}
+
+	date, err := parseDatePointer(&value, "period_from")
+	if err != nil {
+		t.Fatalf("parse period date: %v", err)
+	}
+	if date == nil || date.Format(dateLayout) != "2026-10-20" {
+		t.Fatalf("unexpected period date %v", date)
+	}
+}
+
 func TestClientInvalidTarget(t *testing.T) {
 	content := `{
 		"action":"delete",
