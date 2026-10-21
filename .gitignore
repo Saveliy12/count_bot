@@ -7,3 +7,4 @@ coverage/
 *.out
 *.log
 *.test
+screenshots_to_readme/
