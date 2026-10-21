@@ -792,6 +792,22 @@ func TestLLMProcessorUpdateLatestFiltered(t *testing.T) {
 	}
 }
 
+func TestLLMProcessorBareNumberWithoutPending(t *testing.T) {
+	provider := &fakeIntentProvider{}
+
+	reply, err := newTestLLMProcessor(provider, &fakeExpenseService{}).Process(
+		context.Background(),
+		model.Actor{TelegramID: 42},
+		"6",
+	)
+	if err != nil {
+		t.Fatalf("process: %v", err)
+	}
+	if !strings.Contains(reply, "номер") || !strings.Contains(reply, "удали") {
+		t.Fatalf("expected a clarification for a bare number, got %q", reply)
+	}
+}
+
 func TestLLMProcessorAmbiguousDeleteSelection(t *testing.T) {
 	provider := &fakeIntentProvider{intent: llm.Intent{
 		Action:      llm.ActionDelete,
@@ -997,8 +1013,25 @@ func TestLLMProcessorClarify(t *testing.T) {
 	if err != nil {
 		t.Fatalf("process: %v", err)
 	}
-	if reply != "Сколько и на что была трата?" {
+	if !strings.Contains(reply, "Сколько и на что была трата?") {
 		t.Fatalf("unexpected reply %q", reply)
+	}
+}
+
+func TestExpenseDescriptionEscapesHTML(t *testing.T) {
+	expense := model.Expense{
+		Amount:   decimal.NewFromInt(350),
+		Category: model.CategoryFood,
+		SpentAt:  testDate(2026, 10, 21),
+		Comment:  "<b>tag</b>",
+	}
+
+	description := expenseDescription(expense)
+	if !strings.Contains(description, "&lt;b&gt;tag&lt;/b&gt;") {
+		t.Fatalf("comment was not escaped: %q", description)
+	}
+	if strings.Contains(description, "<b>tag</b>") {
+		t.Fatalf("raw HTML leaked into the message: %q", description)
 	}
 }
 
@@ -1073,7 +1106,7 @@ func TestLLMProcessorClarificationExpires(t *testing.T) {
 	}
 
 	current = current.Add(pendingClarificationTTL + time.Minute)
-	if _, err := processor.Process(context.Background(), model.Actor{TelegramID: 42}, "350"); err != nil {
+	if _, err := processor.Process(context.Background(), model.Actor{TelegramID: 42}, "350 на кофе"); err != nil {
 		t.Fatalf("second message: %v", err)
 	}
 

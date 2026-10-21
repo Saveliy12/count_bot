@@ -134,8 +134,9 @@ func (r *Runner) sendMessage(ctx context.Context, api *tgbot.Bot, chatID int64, 
 	}
 
 	if _, err := api.SendMessage(ctx, &tgbot.SendMessageParams{
-		ChatID: chatID,
-		Text:   text,
+		ChatID:    chatID,
+		Text:      text,
+		ParseMode: models.ParseModeHTML,
 	}); err != nil {
 		r.logger.Error("send telegram message", "error", err, "chat_id", chatID)
 	}

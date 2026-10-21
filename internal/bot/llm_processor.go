@@ -111,18 +111,27 @@ func (p *LLMProcessor) Process(ctx context.Context, actor model.Actor, text stri
 		}
 	}
 
+	if id, ok := targetSelectionID(text); ok {
+		return fmt.Sprintf(
+			"❓ Не понял, что сделать с номером %s. Напиши %s или %s.",
+			code(fmt.Sprintf("#%d", id)),
+			code(fmt.Sprintf("удали %d", id)),
+			code(fmt.Sprintf("измени %d на сумму", id)),
+		), nil
+	}
+
 	intent, err := p.provider.Parse(ctx, llm.Request{Text: text, Today: now})
 	if err != nil {
 		switch {
 		case errors.Is(err, llm.ErrRateLimited):
 			p.logger.Warn("llm rate limited", "error", err)
-			return "Слишком много запросов к ИИ. Попробуй через минуту.", nil
+			return "⏳ Слишком много запросов к ИИ. Попробуй через минуту.", nil
 		case errors.Is(err, llm.ErrUnavailable):
 			p.logger.Warn("llm unavailable", "error", err)
-			return "ИИ временно недоступен. Попробуй ещё раз.", nil
+			return "⚠️ ИИ временно недоступен. Попробуй ещё раз.", nil
 		case errors.Is(err, llm.ErrInvalidResponse):
 			p.logger.Error("invalid llm response", "error", err)
-			return "Не понял сообщение. Попробуй переформулировать.", nil
+			return "🤔 Не понял сообщение. Попробуй переформулировать.", nil
 		default:
 			return "", fmt.Errorf("parse intent: %w", err)
 		}
@@ -144,7 +153,7 @@ func (p *LLMProcessor) Process(ctx context.Context, actor model.Actor, text stri
 	case llm.ActionDelete:
 		return p.delete(ctx, actor, intent, now)
 	default:
-		return "Не понял, что сделать. Напиши, например: «кофе 350».", nil
+		return "🤔 Не понял, что сделать. Напиши, например: «кофе 350».", nil
 	}
 }
 
@@ -164,17 +173,17 @@ func (p *LLMProcessor) create(
 	now time.Time,
 ) (string, error) {
 	if intent.Amount == nil {
-		return "Не понял сумму. Напиши, например: «кофе 350».", nil
+		return "⚠️ Не понял сумму. Напиши, например: «кофе 350».", nil
 	}
 
 	if intent.Category == nil {
-		return "К какой категории отнести трату? Напиши, например: «еда», «транспорт» или «другое».", nil
+		return "❓ К какой категории отнести трату? Напиши, например: «еда», «транспорт» или «другое».", nil
 	}
 	category := *intent.Category
 
 	spentAt, err := expenseDate(intent.DateHint, now)
 	if err != nil {
-		return "Не понял дату. Напиши её как 2026-10-21.", nil
+		return "⚠️ Не понял дату. Напиши её как 2026-10-21.", nil
 	}
 
 	comment := ""
@@ -192,7 +201,7 @@ func (p *LLMProcessor) create(
 		return p.fail("create", err)
 	}
 
-	return "Записал: " + expenseDescription(expense) + ".", nil
+	return "✅ " + bold("Записал") + ": " + expenseDescription(expense) + ".", nil
 }
 
 func (p *LLMProcessor) list(
@@ -203,7 +212,7 @@ func (p *LLMProcessor) list(
 ) (string, error) {
 	from, to, label, err := periodRange(intent, now)
 	if err != nil {
-		return "Не понял период. Скажи, например: «за этот месяц».", nil
+		return "⚠️ Не понял период. Скажи, например: «за этот месяц».", nil
 	}
 
 	filter := model.ExpenseFilter{
@@ -216,7 +225,7 @@ func (p *LLMProcessor) list(
 		return "", fmt.Errorf("summarize expenses: %w", err)
 	}
 	if summary.Count == 0 {
-		return fmt.Sprintf("За %s трат нет.", label), nil
+		return fmt.Sprintf("📭 За %s трат нет.", escapeHTML(label)), nil
 	}
 
 	filter.Limit = listItemLimit
@@ -228,19 +237,19 @@ func (p *LLMProcessor) list(
 	var builder strings.Builder
 	fmt.Fprintf(
 		&builder,
-		"За %s: %s, трат: %d.",
-		label,
-		formatMoney(summary.Total),
+		"📊 %s\n%s, трат: %d.",
+		bold("За "+label),
+		code(formatMoney(summary.Total)),
 		summary.Count,
 	)
 	for _, expense := range page.Items {
 		fmt.Fprintf(
 			&builder,
-			"\n• #%d %s — %s, %s%s",
-			expense.ID,
+			"\n• %s %s — %s, %s%s",
+			code(fmt.Sprintf("#%d", expense.ID)),
 			expense.SpentAt.Format("02.01"),
-			formatMoney(expense.Amount),
-			expense.Category.Label(),
+			code(formatMoney(expense.Amount)),
+			escapeHTML(expense.Category.Label()),
 			commentSuffix(expense.Comment),
 		)
 	}
@@ -269,12 +278,12 @@ func (p *LLMProcessor) update(
 	if intent.DateHint != nil {
 		spentAt, err := expenseDate(intent.DateHint, now)
 		if err != nil {
-			return "Не понял дату. Напиши её как 2026-10-21.", nil
+			return "⚠️ Не понял дату. Напиши её как 2026-10-21.", nil
 		}
 		patch.SpentAt = &spentAt
 	}
 	if patch.Amount == nil && patch.Category == nil && patch.Comment == nil && patch.SpentAt == nil {
-		return "Что именно изменить: сумму, категорию, дату или комментарий?", nil
+		return "❓ Что именно изменить: сумму, категорию, дату или комментарий?", nil
 	}
 
 	target, err := p.resolveTarget(ctx, actor, intent, now)
@@ -286,10 +295,10 @@ func (p *LLMProcessor) update(
 	}
 	if intent.OldAmount != nil && !target.Amount.Equal(*intent.OldAmount) {
 		return fmt.Sprintf(
-			"У траты #%d сумма %s, а не %s. Уточни, какую трату изменить.",
-			target.ID,
-			formatMoney(target.Amount),
-			formatMoney(*intent.OldAmount),
+			"⚠️ У траты %s сумма %s, а не %s. Уточни, какую трату изменить.",
+			code(fmt.Sprintf("#%d", target.ID)),
+			code(formatMoney(target.Amount)),
+			code(formatMoney(*intent.OldAmount)),
 		), nil
 	}
 
@@ -298,7 +307,7 @@ func (p *LLMProcessor) update(
 		return p.fail("update", err)
 	}
 
-	return "Изменил: " + expenseDescription(updated) + ".", nil
+	return "✏️ " + bold("Изменил") + ": " + expenseDescription(updated) + ".", nil
 }
 
 func (p *LLMProcessor) delete(
@@ -317,10 +326,12 @@ func (p *LLMProcessor) delete(
 
 	p.pending.putDeletion(actor.TelegramID, target, now)
 
-	return fmt.Sprintf(
-		"Удалить: %s? Напиши «да» или «нет».",
-		expenseDescription(target),
-	), nil
+	return deleteConfirmation(target), nil
+}
+
+func deleteConfirmation(expense model.Expense) string {
+	return "🗑 " + bold("Удалить трату?") + "\n" +
+		expenseDescription(expense) + "\nНапиши " + bold("да") + " или " + bold("нет") + "."
 }
 
 func (p *LLMProcessor) deleteConfirmed(
@@ -332,15 +343,15 @@ func (p *LLMProcessor) deleteConfirmed(
 		return p.fail("delete", err)
 	}
 
-	return "Удалил: " + expenseDescription(expense) + ".", nil
+	return "✅ " + bold("Удалил") + ": " + expenseDescription(expense) + ".", nil
 }
 
 func (p *LLMProcessor) clarify(intent llm.Intent) string {
 	if intent.Clarification != "" {
-		return intent.Clarification
+		return "❓ " + escapeHTML(intent.Clarification)
 	}
 
-	return "Уточни, пожалуйста: что за трата и на какую сумму?"
+	return "❓ Уточни, пожалуйста: что за трата и на какую сумму?"
 }
 
 func (p *LLMProcessor) resolveTarget(
@@ -499,29 +510,29 @@ func (p *LLMProcessor) handleAmbiguousTarget(
 
 func (p *LLMProcessor) ambiguousMessage(matches []model.Expense, intent llm.Intent) string {
 	var builder strings.Builder
-	builder.WriteString("Нашёл несколько трат:")
+	builder.WriteString("🔎 " + bold("Нашёл несколько трат:"))
 	for _, expense := range matches {
 		fmt.Fprintf(
 			&builder,
-			"\n• #%d %s — %s, %s%s",
-			expense.ID,
+			"\n• %s %s — %s, %s%s",
+			code(fmt.Sprintf("#%d", expense.ID)),
 			formatDisplayDate(expense.SpentAt),
-			formatMoney(expense.Amount),
-			expense.Category.Label(),
+			code(formatMoney(expense.Amount)),
+			escapeHTML(expense.Category.Label()),
 			commentSuffix(expense.Comment),
 		)
 	}
 
-	builder.WriteString("\nНапиши номер из списка: 6.")
+	builder.WriteString("\nНапиши номер из списка: " + code("6") + ".")
 
 	if intent.Action == llm.ActionUpdate {
 		example := "измени такси 20.10.2026"
 		if intent.Amount != nil {
 			example += " на " + formatMoney(*intent.Amount)
 		}
-		builder.WriteString(" Или уточни дату: " + example + ".")
+		builder.WriteString(" Или уточни дату: " + code(example) + ".")
 	} else {
-		builder.WriteString(" Или уточни дату: удали такси 20.10.2026.")
+		builder.WriteString(" Или уточни дату: " + code("удали такси 20.10.2026") + ".")
 	}
 
 	return builder.String()
@@ -535,10 +546,10 @@ func (p *LLMProcessor) selectTarget(
 	now time.Time,
 ) (string, bool, error) {
 	if isNo(text) {
-		return "Отменил выбор.", true, nil
+		return "↩️ Отменил выбор.", true, nil
 	}
 	if isYes(text) {
-		return "Сначала выбери номер траты из списка.", true, nil
+		return "⚠️ Сначала выбери номер траты из списка.", true, nil
 	}
 
 	id, ok := targetSelectionID(text)
@@ -556,25 +567,22 @@ func (p *LLMProcessor) selectTarget(
 	if selected == nil {
 		p.pending.putTargetSelection(actor.TelegramID, state.candidates, state.action, state.patch, now)
 		return fmt.Sprintf(
-			"В списке нет траты #%d. Напиши номер из списка или «отмена».",
-			id,
+			"⚠️ В списке нет траты %s. Напиши номер из списка или «отмена».",
+			code(fmt.Sprintf("#%d", id)),
 		), true, nil
 	}
 
 	switch state.action {
 	case llm.ActionDelete:
 		p.pending.putDeletion(actor.TelegramID, *selected, now)
-		return fmt.Sprintf(
-			"Удалить: %s? Напиши «да» или «нет».",
-			expenseDescription(*selected),
-		), true, nil
+		return deleteConfirmation(*selected), true, nil
 	case llm.ActionUpdate:
 		updated, err := p.expenses.UpdateExpense(ctx, actor, selected.ID, state.patch)
 		if err != nil {
 			reply, failure := p.fail("update", err)
 			return reply, true, failure
 		}
-		return "Изменил: " + expenseDescription(updated) + ".", true, nil
+		return "✏️ " + bold("Изменил") + ": " + expenseDescription(updated) + ".", true, nil
 	default:
 		return "", false, nil
 	}
@@ -598,15 +606,15 @@ func targetSelectionID(text string) (int64, bool) {
 func (p *LLMProcessor) targetFailure(err error) (string, error) {
 	switch {
 	case errors.Is(err, errTargetMissing):
-		return "Не понял, какую трату имеешь в виду. Скажи «последнее» или назови описание.", nil
+		return "❓ Не понял, какую трату имеешь в виду. Скажи «последнее», описание или номер.", nil
 	case errors.Is(err, errTargetNotFound):
-		return "Не нашёл такую трату. Уточни описание или скажи «последнее».", nil
+		return "⚠️ Не нашёл такую трату. Уточни дату или описание.", nil
 	case errors.Is(err, errTargetAmbiguous):
-		return "Нашёл несколько подходящих трат. Скажи «последнее» или назови номер траты.", nil
+		return "🔎 Нашёл несколько подходящих трат. Уточни дату или номер.", nil
 	case errors.Is(err, errTargetTooBroad):
-		return "Слишком много подходящих трат. Уточни описание или назови номер.", nil
+		return "⚠️ Слишком много подходящих трат. Уточни описание или назови номер.", nil
 	case errors.Is(err, errTargetInvalidDate):
-		return "Не понял дату старой траты. Напиши её как 2026-10-21.", nil
+		return "⚠️ Не понял дату старой траты. Напиши её как 2026-10-21.", nil
 	default:
 		return "", err
 	}
@@ -615,13 +623,13 @@ func (p *LLMProcessor) targetFailure(err error) (string, error) {
 func (p *LLMProcessor) fail(action string, err error) (string, error) {
 	var validationErr *model.ValidationError
 	if errors.As(err, &validationErr) {
-		return validationMessage(validationErr), nil
+		return "⚠️ " + validationMessage(validationErr), nil
 	}
 	if errors.Is(err, model.ErrNotFound) {
-		return "Не нашёл такую трату.", nil
+		return "⚠️ Не нашёл такую трату.", nil
 	}
 	if errors.Is(err, model.ErrConflict) {
-		return "Трата изменилась или уже удалена. Запроси удаление заново.", nil
+		return "⚠️ Трата изменилась или уже удалена. Запроси удаление заново.", nil
 	}
 
 	p.logger.Error("expense action failed", "action", action, "error", err)
@@ -732,8 +740,8 @@ func parseQueryAmount(query string) (decimal.Decimal, error) {
 func expenseDescription(expense model.Expense) string {
 	return fmt.Sprintf(
 		"%s — %s, %s%s",
-		formatMoney(expense.Amount),
-		expense.Category.Label(),
+		code(formatMoney(expense.Amount)),
+		escapeHTML(expense.Category.Label()),
 		formatDisplayDate(expense.SpentAt),
 		commentSuffix(expense.Comment),
 	)
@@ -779,7 +787,7 @@ func commentSuffix(comment string) string {
 		return ""
 	}
 
-	return " (" + truncateRunes(comment, displayedCommentLimit) + ")"
+	return " (" + escapeHTML(truncateRunes(comment, displayedCommentLimit)) + ")"
 }
 
 func truncateRunes(value string, limit int) string {
