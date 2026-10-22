@@ -5,6 +5,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -131,9 +132,12 @@ func TestModelEvaluation(t *testing.T) {
 
 	ctx := context.Background()
 	passed := 0
+	var durations []time.Duration
 	for _, test := range cases {
 		startedAt := time.Now()
 		intent, err := client.Parse(ctx, Request{Text: test.text, Today: evalToday})
+		elapsed := time.Since(startedAt)
+		durations = append(durations, elapsed)
 		if err != nil {
 			t.Errorf("%s: parse %q: %v", test.name, test.text, err)
 			continue
@@ -215,8 +219,16 @@ func TestModelEvaluation(t *testing.T) {
 			passed++
 		}
 
-		t.Logf("%s: %.2fs", test.name, time.Since(startedAt).Seconds())
+		t.Logf("%s: %.2fs", test.name, elapsed.Seconds())
 		time.Sleep(delay)
+	}
+
+	if len(durations) > 0 {
+		sorted := slices.Clone(durations)
+		slices.Sort(sorted)
+		median := sorted[len(sorted)/2]
+		t.Logf("latency: first=%.2fs median=%.2fs max=%.2fs",
+			durations[0].Seconds(), median.Seconds(), sorted[len(sorted)-1].Seconds())
 	}
 
 	t.Logf("accuracy: %d/%d", passed, len(cases))
