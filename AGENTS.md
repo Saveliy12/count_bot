@@ -1,50 +1,49 @@
 # AGENTS.md
 
-Правила для coding-агентов, работающих с этим репозиторием.
+Guidance for coding agents working in this repository.
 
-## Что это за проект
+## Project
 
-Go-монолит для семейных расходов: Telegram-бот, REST API и PostgreSQL.
-LLM используется только как парсер текста в типизированное намерение. Бизнес-логика,
-валидация и запись в БД — на Go.
+Go monolith for family expenses: a Telegram bot, a REST API and PostgreSQL.
+The LLM is only a parser: it turns Russian text into a typed `llm.Intent`.
+Validation, ownership checks and all database writes stay in Go.
 
-## Структура
+## Layout
 
-- `cmd/main.go` — точка входа, `.env`, graceful shutdown.
-- `internal/app` — сборка зависимостей и запуск HTTP + Telegram.
-- `internal/api` — HTTP-роутер, middleware, REST панели.
-- `internal/api/web` — встроенная статика веб-панели (`go:embed`).
-- `internal/bot` — Telegram polling, handler, LLMProcessor, pending-состояния.
-- `internal/llm` — Groq-клиент, strict JSON Schema, intent, prompt, eval.
-- `internal/config` — env-конфигурация.
-- `internal/model` — доменные типы (деньги — `decimal`, дата — `time.Time`).
-- `internal/service` / `internal/repository` — бизнес-логика и PostgreSQL.
-- `internal/migrator`, `migrations` — goose-миграции.
-- `internal/testdb` — временные схемы PostgreSQL для интеграционных тестов.
-- `docs/` — AI-документация, скриншоты и журнал крупных изменений.
-- `README.md` — быстрый старт, архитектура, API и ручной чек-лист.
+- `cmd/main.go` — entry point, `.env`, graceful shutdown.
+- `internal/app` — dependency wiring, HTTP + Telegram startup.
+- `internal/api` — HTTP router, middleware, panel REST API.
+- `internal/api/web` — embedded panel assets (`go:embed`).
+- `internal/bot` — Telegram polling, handler, `LLMProcessor`, pending state.
+- `internal/llm` — Groq client, strict JSON Schema, intent, prompt, eval.
+- `internal/config` — environment configuration.
+- `internal/model` — domain types (money is `decimal`, dates are `time.Time`).
+- `internal/service`, `internal/repository` — business logic and PostgreSQL.
+- `internal/migrator`, `migrations` — goose migrations.
+- `internal/testdb` — temporary PostgreSQL schemas for integration tests.
+- `docs/` — AI notes, screenshots and the change log.
+- `README.md` — quick start, architecture, API and checks.
 
-## Главные правила
+## Rules
 
-1. **Маленькие итерации.** Один этап — одна проверяемая правка. Сначала план, потом код.
-2. **LLM не пишет в БД.** Провайдер возвращает `llm.Intent`; выполнение действий идёт
-   только через `service.ExpenseService`.
-3. **Деньги — только `shopspring/decimal`.** Не использовать `float64`.
-4. **Владелец траты проверяется на уровне сервиса.** Чужие траты не должны быть доступны.
-5. **Даты трат** — календарные, `YYYY-MM-DD`; бизнес-дата берётся из `TIMEZONE`.
-6. **Удаление в боте — только после подтверждения** и только через
-   `DeleteExpenseIfUnchanged` (атомарная проверка снимка).
-7. **Секреты не читать и не печатать.** Не выводить содержимое `.env`, токены и ключи.
-8. **Git:** не коммитить, не пушить и не создавать репозиторий без явного разрешения.
-9. **Миграции только добавлять.** Не переписывать уже применённые файлы.
-10. **Документация должна соответствовать коду.** Если поведение изменилось — обновить
-    `docs/AI_SYSTEM.md`, а при необходимости и остальные документы.
-11. **Журнал значимых изменений.** После изменений API, схемы БД, межслойного flow или
-    инфраструктуры добавить короткую запись в `docs/IMPLEMENTATION_LOG.md`:
-    задача → что изменилось → как работает теперь → что проверено → ограничения.
-    Мелкий рефакторинг и форматирование в журнал не заносить.
+1. Work in small iterations. Plan first, then code; one change should be easy to verify.
+2. The LLM never writes to the database. Providers return `llm.Intent`; actions go
+   through `service.ExpenseService`.
+3. Money is `shopspring/decimal`. Do not introduce `float64` for amounts.
+4. Ownership is enforced in the service layer. Never expose another user's expenses.
+5. Dates are calendar dates (`YYYY-MM-DD`); "today" comes from `TIMEZONE`.
+6. Bot deletion requires confirmation and must go through `DeleteExpenseIfUnchanged`,
+   which checks the row snapshot.
+7. Never read or print secrets. Do not output `.env`, tokens or API keys.
+8. Do not commit, push or create a repository without explicit permission.
+9. Only add migrations. Do not rewrite files that have already been applied.
+10. Keep docs in sync with code. If behavior changes, update `docs/AI_SYSTEM.md` and
+    anything else affected.
+11. After API, schema, cross-layer or infrastructure changes, add a short
+    `docs/IMPLEMENTATION_LOG.md` entry: what changed, how it was checked, what is left.
+    Skip formatting and small refactors.
 
-## Проверки
+## Checks
 
 ```bash
 gofmt -l -w .
@@ -54,25 +53,25 @@ go test -race ./internal/bot ./internal/repository ./internal/llm ./internal/con
 go build ./...
 ```
 
-Интеграционные тесты требуют PostgreSQL:
+Integration tests need PostgreSQL:
 
 ```bash
 TEST_DATABASE_URL='postgres://expenses:expenses@127.0.0.1:55432/expenses?sslmode=disable' \
   go test ./... -count=1
 ```
 
-Живые тесты с Groq запускаются только явно:
+Live Groq tests are opt-in:
 
 ```bash
-# сквозной сценарий create → list → update → delete
+# end-to-end create → list → update → delete
 LLM_INTEGRATION=1 TEST_DATABASE_URL='...' \
   go test ./internal/bot -run TestLLMProcessorWithGroq -v
 
-# оценка качества модели (быстрая выборка)
+# small eval sample
 LLM_EVAL=1 LLM_EVAL_LIMIT=10 LLM_EVAL_DELAY=3s \
   go test ./internal/llm -run TestModelEvaluation -v
 
-# полный набор на free tier
+# full eval on the free tier
 LLM_EVAL=1 LLM_EVAL_DELAY=18s \
   go test ./internal/llm -run TestModelEvaluation -v -timeout 20m
 ```
@@ -83,29 +82,27 @@ LLM_EVAL=1 LLM_EVAL_DELAY=18s \
 docker compose up --build -d
 docker compose ps
 docker compose logs -f app
-docker compose down          # volume с данными сохраняется
+docker compose down          # keeps the data volume
 ```
 
-- `DATABASE_URL` в `.env` нужен для локального `go run` и указывает на хост.
-- В Compose приложение получает отдельный `COMPOSE_DATABASE_URL` с хостом `postgres`.
-  Если меняешь `POSTGRES_*`, обнови и `COMPOSE_DATABASE_URL`.
-- Проверено на изолированном проекте: миграции, CRUD, graceful stop и сохранение
-  данных после перезапуска.
-- Compose по умолчанию включает `SEED_DEMO_USER=true`: на пустой БД создаётся
-  «Демо-пользователь», чтобы панель была рабочей без Telegram. Если пользователи уже
-  есть, seed не срабатывает.
-- Наружу публикуются только loopback-порты: `APP_HOST_PORT` (8083) и
-  `POSTGRES_HOST_PORT` (55432).
-- Для изолированных проверок используй `docker compose -p <test-name>` и отдельный
-  временный env-файл. `docker compose down -v` удаляет данные и допустим только для
-  явно тестового project name.
+- `DATABASE_URL` in `.env` is for local `go run` and points at the host.
+- Inside Compose the app uses `COMPOSE_DATABASE_URL` with host `postgres`. If you
+  change `POSTGRES_*`, update it too.
+- Verified on an isolated project: migrations, CRUD, graceful stop and data surviving
+  a restart.
+- Compose sets `SEED_DEMO_USER=true` by default. On an empty database it creates
+  "Демо-пользователь" so the panel works without Telegram; if users exist, the seed
+  does nothing.
+- Only loopback ports are published: `APP_HOST_PORT` (8083) and `POSTGRES_HOST_PORT`
+  (55432).
+- Use `docker compose -p <test-name>` with a temporary env file for isolated checks.
+  `docker compose down -v` deletes data and is fine only for a test project.
 
-## Текущие ограничения
+## Known limitations
 
-- Веб-панель и README готовы; остался финальный ручной Telegram E2E на реальном боте.
-  Удаление в панели подтверждается нативным `confirm`.
-- Если локальный `go run` занимает порт 8083, останови его перед `docker compose up`.
-- Pending-состояния (подтверждение удаления/уточнения) хранятся в памяти и теряются
-  при рестарте.
-- Несколько трат в одном сообщении пока не поддерживаются.
-- REST API и веб-панель работают без авторизации — осознанное решение для локального демо.
+- Pending state (delete confirmation, clarification) lives in memory and is lost on
+  restart.
+- One expense per message.
+- No deduplication of redelivered Telegram updates.
+- Panel deletion uses the native `confirm`; the owner cannot be changed in the panel.
+- The API and panel have no auth. That is a demo requirement, not a production choice.
