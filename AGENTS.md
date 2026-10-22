@@ -2,6 +2,9 @@
 
 Guidance for coding agents working in this repository.
 
+This file is in English on purpose: coding agents read it. User-facing docs are in
+Russian.
+
 ## Project
 
 Go monolith for family expenses: a Telegram bot, a REST API and PostgreSQL.
@@ -88,8 +91,6 @@ docker compose down          # keeps the data volume
 - `DATABASE_URL` in `.env` is for local `go run` and points at the host.
 - Inside Compose the app uses `COMPOSE_DATABASE_URL` with host `postgres`. If you
   change `POSTGRES_*`, update it too.
-- Verified on an isolated project: migrations, CRUD, graceful stop and data surviving
-  a restart.
 - Compose sets `SEED_DEMO_USER=true` by default. On an empty database it creates
   "Демо-пользователь" so the panel works without Telegram; if users exist, the seed
   does nothing.
@@ -100,9 +101,4 @@ docker compose down          # keeps the data volume
 
 ## Known limitations
 
-- Pending state (delete confirmation, clarification) lives in memory and is lost on
-  restart.
-- One expense per message.
-- No deduplication of redelivered Telegram updates.
-- Panel deletion uses the native `confirm`; the owner cannot be changed in the panel.
-- The API and panel have no auth. That is a demo requirement, not a production choice.
+See the limitations section in `README.md`.
